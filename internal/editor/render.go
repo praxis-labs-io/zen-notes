@@ -45,7 +45,7 @@ const (
 
 var (
 	numberStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 )
 
 // SetDarkBackground picks fallbacks when only the light or dark bias is

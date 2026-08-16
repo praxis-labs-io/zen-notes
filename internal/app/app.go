@@ -25,7 +25,7 @@ const statusTicks = 7
 
 // flashDuration is how long a yank stays lit. Long enough to catch, short
 // enough that it never feels like a selection you have to dismiss.
-const flashDuration = 250 * time.Millisecond
+const flashDuration = 110 * time.Millisecond
 
 // fileChangedMsg carries the path a watcher saw change.
 type fileChangedMsg string
