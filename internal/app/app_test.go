@@ -348,6 +348,70 @@ func TestViewShowsTheDateAndMode(t *testing.T) {
 	}
 }
 
+func TestCursorShapePerMode(t *testing.T) {
+	tests := []struct {
+		name string
+		keys []string
+		want tea.CursorShape
+	}{
+		{"normal is a block", nil, tea.CursorBlock},
+		{"insert is a bar", []string{"i"}, tea.CursorBar},
+		{"visual is a block", []string{"v"}, tea.CursorBlock},
+		{"visual line is a block", []string{"V"}, tea.CursorBlock},
+		{"back to normal is a block again", []string{"i", "<esc>"}, tea.CursorBlock},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel(t, "hello")
+			press(m, tt.keys...)
+			c := m.View().Cursor
+			if c == nil {
+				t.Fatal("no cursor reported")
+			}
+			if c.Shape != tt.want {
+				t.Errorf("shape = %v, want %v", c.Shape, tt.want)
+			}
+		})
+	}
+}
+
+// A nil color leaves the terminal's own cursor color alone, which is the point.
+func TestCursorTakesTheTerminalColor(t *testing.T) {
+	m := newTestModel(t, "hello")
+	if c := m.View().Cursor; c == nil || c.Color != nil {
+		t.Fatalf("cursor color = %v, want nil", c.Color)
+	}
+}
+
+func TestCursorTracksTheCaret(t *testing.T) {
+	m := newTestModel(t, "hello\nworld")
+	press(m, "j", "l", "l")
+
+	c := m.View().Cursor
+	if c == nil || c.X != 2 || c.Y != 1 {
+		t.Fatalf("cursor = %v, want X 2 Y 1", c)
+	}
+}
+
+func TestCursorMovesToTheCommandLine(t *testing.T) {
+	m := newTestModel(t, "hello")
+	press(m, ":", "w", "q")
+
+	c := m.View().Cursor
+	if c == nil {
+		t.Fatal("no cursor reported")
+	}
+	if c.Y != m.textHeight() {
+		t.Fatalf("cursor Y = %d, want the status row %d", c.Y, m.textHeight())
+	}
+	if c.X != len(":wq") {
+		t.Fatalf("cursor X = %d, want %d", c.X, len(":wq"))
+	}
+	if c.Shape != tea.CursorBar {
+		t.Fatalf("shape = %v, want a bar on the command line", c.Shape)
+	}
+}
+
 func TestViewMarksUnsavedEdits(t *testing.T) {
 	m := newTestModel(t, "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

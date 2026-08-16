@@ -182,6 +182,66 @@ func TestCursorColumnCountsDisplayWidth(t *testing.T) {
 	}
 }
 
+func TestRenderReportsTheCursorPosition(t *testing.T) {
+	e := New("hello\nworld")
+	feed(t, e, "jll")
+
+	got := e.Render(20, 10)
+	if got.CursorRow != 1 || got.CursorCol != 2 {
+		t.Fatalf("cursor = %d, %d; want 1, 2", got.CursorRow, got.CursorCol)
+	}
+}
+
+func TestRenderCursorFollowsAWrappedLine(t *testing.T) {
+	e := New("hello world")
+	feed(t, e, "$")
+
+	got := e.Render(5, 10)
+	if got.CursorRow != 1 || got.CursorCol != 4 {
+		t.Fatalf("cursor = %d, %d; want 1, 4", got.CursorRow, got.CursorCol)
+	}
+}
+
+func TestRenderCursorIsRelativeToTheScrolledWindow(t *testing.T) {
+	e := New(strings.Repeat("x\n", 40))
+	feed(t, e, "G")
+
+	got := e.Render(20, 10)
+	if got.CursorRow < 0 || got.CursorRow >= 10 {
+		t.Fatalf("cursor row = %d, want inside a 10 row window", got.CursorRow)
+	}
+}
+
+func TestRenderCursorCountsDisplayWidth(t *testing.T) {
+	e := New("日本x")
+	feed(t, e, "ll")
+
+	got := e.Render(20, 10)
+	if got.CursorCol != 4 {
+		t.Fatalf("cursor col = %d, want 4", got.CursorCol)
+	}
+}
+
+// The caret sits one past the last rune in insert mode, on the blank cell.
+func TestRenderCursorPastTheLastRune(t *testing.T) {
+	e := New("ab")
+	feed(t, e, "A")
+
+	got := e.Render(20, 10)
+	if got.CursorCol != 2 {
+		t.Fatalf("cursor col = %d, want 2", got.CursorCol)
+	}
+}
+
+func TestRenderNoLongerPaintsTheCursor(t *testing.T) {
+	e := New("hello")
+	got := e.Render(20, 10)
+
+	if !strings.Contains(got.Content, "hello") {
+		t.Fatal("the cursor is still painted into the content, splitting the text")
+	}
+}
+
 func TestScrollKeepsCursorVisible(t *testing.T) {
 	tests := []struct {
 		name             string

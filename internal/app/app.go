@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/drucial/zen-notes/internal/editor"
 	"github.com/drucial/zen-notes/internal/note"
+	"github.com/mattn/go-runewidth"
 )
 
 // saveInterval is how often a dirty buffer reaches disk. Short enough that a
@@ -317,10 +318,27 @@ var (
 func (m *Model) textHeight() int { return max(m.height-1, 1) }
 
 func (m *Model) View() tea.View {
-	body := m.ed.View(m.width, m.textHeight())
-	v := tea.NewView(body + "\n" + m.statusBar())
+	r := m.ed.Render(m.width, m.textHeight())
+	v := tea.NewView(r.Content + "\n" + m.statusBar())
 	v.AltScreen = true
+	v.Cursor = m.cursor(r)
 	return v
+}
+
+// cursor places the real terminal cursor. Color stays nil so the terminal's
+// own cursor color applies, and the shape says which mode you are in.
+func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
+	if cmd := m.ed.CommandLine(); cmd != "" {
+		c := tea.NewCursor(runewidth.StringWidth(cmd), m.textHeight())
+		c.Shape = tea.CursorBar
+		return c
+	}
+	c := tea.NewCursor(r.CursorCol, r.CursorRow)
+	c.Shape = tea.CursorBlock
+	if m.ed.Mode() == editor.ModeInsert {
+		c.Shape = tea.CursorBar
+	}
+	return c
 }
 
 func (m *Model) statusBar() string {

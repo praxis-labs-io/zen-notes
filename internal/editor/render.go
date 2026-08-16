@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/mattn/go-runewidth"
 )
 
 // Styles use ANSI base colors so the note takes on the terminal's own theme
@@ -21,10 +20,15 @@ var classStyles = map[tokenClass]lipgloss.Style{
 	tokLink:      lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("4")),
 }
 
-var (
-	cursorStyle    = lipgloss.NewStyle().Reverse(true)
-	selectionStyle = lipgloss.NewStyle().Reverse(true)
-)
+var selectionStyle = lipgloss.NewStyle().Reverse(true)
+
+// Rendered is one frame of the buffer plus where the caret sits in it. The
+// caret is reported, not drawn, so the terminal's own cursor shows through.
+type Rendered struct {
+	Content   string
+	CursorRow int
+	CursorCol int
+}
 
 // vrow is one wrapped screen row: a slice of a logical line.
 type vrow struct {
@@ -32,9 +36,9 @@ type vrow struct {
 	start, end int
 }
 
-// View renders height rows of the buffer, scrolling to keep the cursor in
+// Render draws height rows of the buffer, scrolling to keep the caret in
 // sight. Width and height are the text area, excluding the status bar.
-func (e *Editor) View(width, height int) string {
+func (e *Editor) Render(width, height int) Rendered {
 	width = max(width, 1)
 	height = max(height, 1)
 
@@ -48,10 +52,13 @@ func (e *Editor) View(width, height int) string {
 			out = append(out, "")
 			continue
 		}
-		showCursor := i == cursorRow
-		out = append(out, e.renderRow(rows[i], classes, width, showCursor, cursorCol))
+		out = append(out, e.renderRow(rows[i], classes))
 	}
-	return strings.Join(out, "\n")
+	return Rendered{
+		Content:   strings.Join(out, "\n"),
+		CursorRow: cursorRow - e.top,
+		CursorCol: cursorCol,
+	}
 }
 
 // layout wraps every line and reports where the cursor lands, as a row index
@@ -79,30 +86,20 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 	return rows, cursorRow, cursorCol
 }
 
-// renderRow styles one screen row, marking any selection and the cursor.
-func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, showCursor bool, cursorCol int) string {
+// renderRow styles one screen row, marking any visual selection.
+func (e *Editor) renderRow(row vrow, classes [][]tokenClass) string {
 	runes := e.buf.runes(row.line)
 	lineClasses := classes[row.line]
 	selFrom, selTo, selLines := e.Selection()
 	selecting := e.mode == ModeVisual || e.mode == ModeVisualLine
 
 	var sb strings.Builder
-	col := 0
 	for i := row.start; i < row.end && i < len(runes); i++ {
 		style := classStyles[lineClasses[i]]
 		if selecting && inSelection(Pos{row.line, i}, selFrom, selTo, selLines) {
 			style = selectionStyle
 		}
-		if showCursor && col == cursorCol {
-			style = cursorStyle
-		}
 		sb.WriteString(style.Render(string(runes[i])))
-		col += runewidth.RuneWidth(runes[i])
-	}
-
-	// The caret past the last rune, in insert mode or on an empty line.
-	if showCursor && col <= cursorCol && col < width {
-		sb.WriteString(cursorStyle.Render(" "))
 	}
 	return sb.String()
 }
