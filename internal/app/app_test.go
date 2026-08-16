@@ -470,6 +470,40 @@ func TestExpiredStatusLeavesTheStatusBar(t *testing.T) {
 	}
 }
 
+func TestYankSchedulesTheFlashToGoOut(t *testing.T) {
+	m := newTestModel(t, "foo bar")
+	_, cmd := m.Update(keyMsg("y"))
+	_, cmd = m.Update(keyMsg("y"))
+
+	if !m.ed.YankFlash() {
+		t.Fatal("yank did not light anything up")
+	}
+	if cmd == nil {
+		t.Fatal("yank returned no command to put the flash out")
+	}
+
+	m.Update(yankFlashDoneMsg{})
+	if m.ed.YankFlash() {
+		t.Fatal("the flash outlived its timer")
+	}
+}
+
+func TestMovingDoesNotScheduleAFlash(t *testing.T) {
+	m := newTestModel(t, "foo bar")
+	if _, cmd := m.Update(keyMsg("l")); cmd != nil {
+		t.Fatal("a plain motion scheduled a flash timer")
+	}
+}
+
+// The terminal theme can change while the app is running, so the background
+// is asked for again rather than only at startup.
+func TestBackgroundIsRequeriedOnFocus(t *testing.T) {
+	m := newTestModel(t, "hello")
+	if _, cmd := m.Update(tea.FocusMsg{}); cmd == nil {
+		t.Fatal("regaining focus did not re-ask for the background")
+	}
+}
+
 func TestNoBordersAnywhere(t *testing.T) {
 	m := newTestModel(t, "hello")
 	out := ansi.Strip(m.View().Content)

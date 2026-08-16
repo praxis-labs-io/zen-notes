@@ -174,6 +174,7 @@ func (e *Editor) applyBlock(op rune) {
 	e.reg = register{text: strings.Join(parts, "\n"), block: true}
 
 	if op == 'y' {
+		e.flashYank(from, to, false, true)
 		e.reportYank(to.Line-from.Line+1, "line")
 		e.mode = ModeNormal
 		e.cursor = Pos{from.Line, lo}

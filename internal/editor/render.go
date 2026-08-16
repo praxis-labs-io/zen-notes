@@ -24,11 +24,23 @@ var classStyles = map[tokenClass]lipgloss.Style{
 	tokLink:      lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("4")),
 }
 
-// Fallback selections for when the terminal will not say what its background
-// is, which happens under some multiplexers.
+// Fallbacks for when the terminal will not say what its background is,
+// which happens under some multiplexers.
 var (
 	darkSelection  = lipgloss.NewStyle().Background(lipgloss.Color("237"))
 	lightSelection = lipgloss.NewStyle().Background(lipgloss.Color("253"))
+	darkFlash      = lipgloss.NewStyle().Background(lipgloss.Color("242"))
+	lightFlash     = lipgloss.NewStyle().Background(lipgloss.Color("248"))
+)
+
+// How far the selection and the yank flash shift off the background. A step
+// near white reads stronger than the same step near black, so light themes
+// take a smaller one.
+const (
+	darkSelectionStep  = 0.14
+	lightSelectionStep = 0.07
+	darkFlashStep      = 0.30
+	lightFlashStep     = 0.16
 )
 
 var (
@@ -36,18 +48,19 @@ var (
 	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
-// SetDarkBackground picks a fallback selection when only the light or dark
-// bias is known, not the colour itself.
+// SetDarkBackground picks fallbacks when only the light or dark bias is
+// known, not the colour itself.
 func (e *Editor) SetDarkBackground(dark bool) {
 	e.darkBackground = dark
-	e.selection = darkSelection
+	e.selection, e.flashStyle = darkSelection, darkFlash
 	if !dark {
-		e.selection = lightSelection
+		e.selection, e.flashStyle = lightSelection, lightFlash
 	}
 }
 
-// SetBackground tunes the selection to the terminal's own background, keeping
-// its hue so the highlight belongs to the theme instead of greying it out.
+// SetBackground tunes the selection and the yank flash to the terminal's own
+// background, keeping its hue so both belong to the theme rather than greying
+// it out. Call it again whenever the terminal may have changed theme.
 func (e *Editor) SetBackground(c color.Color) {
 	col, ok := colorful.MakeColor(c)
 	if !ok {
@@ -56,15 +69,39 @@ func (e *Editor) SetBackground(c color.Color) {
 	h, s, l := col.Hsl()
 	e.darkBackground = l < 0.5
 
-	if e.darkBackground {
-		l = min(l+0.14, 1)
-	} else {
-		l = max(l-0.12, 0)
+	selStep, flashStep := darkSelectionStep, darkFlashStep
+	if !e.darkBackground {
+		selStep, flashStep = -lightSelectionStep, -lightFlashStep
 	}
-	e.selection = lipgloss.NewStyle().Background(lipgloss.Color(colorful.Hsl(h, s, l).Hex()))
+	e.selection = shifted(h, s, l, selStep)
+	e.flashStyle = shifted(h, s, l, flashStep)
+}
+
+// shifted builds a background the given lightness step away from the theme's.
+func shifted(h, s, l, step float64) lipgloss.Style {
+	l = min(max(l+step, 0), 1)
+	return lipgloss.NewStyle().Background(lipgloss.Color(colorful.Hsl(h, s, l).Hex()))
 }
 
 func (e *Editor) selectionStyle() lipgloss.Style { return e.selection }
+
+// YankFlash reports whether a yank is still lit up.
+func (e *Editor) YankFlash() bool { return e.flash.active }
+
+// ClearYankFlash puts the flash out.
+func (e *Editor) ClearYankFlash() { e.flash = flashRange{} }
+
+// flashYank lights up what a yank just took, so it is visible that it worked.
+func (e *Editor) flashYank(from, to Pos, linewise, block bool) {
+	e.flash = flashRange{active: true, from: from, to: to, linewise: linewise, block: block}
+}
+
+func (e *Editor) flashCovers(p Pos) bool {
+	if !e.flash.active {
+		return false
+	}
+	return inRange(p, e.flash.from, e.flash.to, e.flash.linewise, e.flash.block)
+}
 
 // GutterWidth is the widest line number plus the space before the text.
 // Reserved at all times, so nothing shifts as the line count grows.
@@ -182,7 +219,10 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
 			break
 		}
 		style := classStyles[lineClasses[i]]
-		if e.selected(Pos{row.line, i}, selFrom, selTo, selLines) {
+		switch {
+		case e.flashCovers(Pos{row.line, i}):
+			style = e.flashStyle
+		case e.selected(Pos{row.line, i}, selFrom, selTo, selLines):
 			style = e.selectionStyle()
 		}
 		sb.WriteString(style.Render(string(runes[i])))
@@ -196,13 +236,22 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
 func (e *Editor) selected(p, from, to Pos, linewise bool) bool {
 	switch e.mode {
 	case ModeVisualBlock:
-		lo, hi := blockCols(from, to)
-		return p.Line >= from.Line && p.Line <= to.Line && p.Col >= lo && p.Col <= hi
+		return inRange(p, from, to, false, true)
 	case ModeVisual, ModeVisualLine:
-		return inSelection(p, from, to, linewise)
+		return inRange(p, from, to, linewise, false)
 	default:
 		return false
 	}
+}
+
+// inRange covers the three shapes a highlight can take: a rectangle, whole
+// lines, or a run of characters.
+func inRange(p, from, to Pos, linewise, block bool) bool {
+	if block {
+		lo, hi := blockCols(from, to)
+		return p.Line >= from.Line && p.Line <= to.Line && p.Col >= lo && p.Col <= hi
+	}
+	return inSelection(p, from, to, linewise)
 }
 
 // inSelection reports whether p falls inside an ordered visual range.

@@ -87,11 +87,17 @@ No color is hardcoded. Text, gutter, status bar and help all use ANSI slots
 0 to 15, so they come from your terminal theme. The caret is the real
 terminal cursor, in your cursor color: a block in normal, a bar in insert.
 
-The selection is the one computed color. It has to be a background a single
-step off your own, so zen-notes asks the terminal for its background and
-shifts the lightness while keeping the hue, which keeps the highlight inside
-your theme. If the terminal will not answer, and some multiplexers will not,
-it falls back to a neutral grey and assumes dark.
+The selection and the yank flash are the two computed colors. Both need a
+background a step off your own, so zen-notes asks the terminal for its
+background and shifts the lightness while keeping the hue, which keeps them
+inside your theme. A step near white reads stronger than the same step near
+black, so light themes get a smaller one. The background is asked for again
+whenever the window regains focus, so switching theme mid-session is picked
+up. If the terminal will not answer, and some multiplexers will not, it falls
+back to a neutral grey and assumes dark.
+
+A yank changes nothing on screen, so what it took lights up for a moment and
+the status bar says how much.
 
 ## Development
 

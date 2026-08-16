@@ -459,3 +459,84 @@ func selectionHex(t *testing.T, content string) string {
 	n := func(s string) int { v, _ := strconv.Atoi(s); return v }
 	return fmt.Sprintf("#%02x%02x%02x", n(m[1]), n(m[2]), n(m[3]))
 }
+
+func TestYankFlashCoversWhatWasTaken(t *testing.T) {
+	tests := []struct {
+		name    string
+		text    string
+		keys    string
+		covered []Pos
+		clear   []Pos
+	}{
+		{"yiw covers the word", "foo bar", "wyiw",
+			[]Pos{{0, 4}, {0, 6}}, []Pos{{0, 0}, {0, 3}}},
+		{"yy covers the whole line", "ab\ncd", "yy",
+			[]Pos{{0, 0}, {0, 1}}, []Pos{{1, 0}}},
+		{"2yy covers both lines", "ab\ncd\nef", "2yy",
+			[]Pos{{0, 0}, {1, 1}}, []Pos{{2, 0}}},
+		{"a visual range", "abcdef", "vlly",
+			[]Pos{{0, 0}, {0, 2}}, []Pos{{0, 3}}},
+		{"a block", "abcd\nabcd", "l<c-v>jy",
+			[]Pos{{0, 1}, {1, 1}}, []Pos{{0, 0}, {0, 2}}},
+		{"yw across a space", "foo bar", "yw",
+			[]Pos{{0, 0}, {0, 3}}, []Pos{{0, 4}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, tt.keys)
+			if !e.YankFlash() {
+				t.Fatal("no flash after a yank")
+			}
+			for _, p := range tt.covered {
+				if !e.flashCovers(p) {
+					t.Errorf("%v not flashed", p)
+				}
+			}
+			for _, p := range tt.clear {
+				if e.flashCovers(p) {
+					t.Errorf("%v flashed but was not yanked", p)
+				}
+			}
+		})
+	}
+}
+
+func TestDeleteDoesNotFlash(t *testing.T) {
+	if run(t, "abc", "dw").YankFlash() {
+		t.Fatal("delete flashed; the change is already visible")
+	}
+}
+
+func TestClearYankFlash(t *testing.T) {
+	e := run(t, "foo bar", "yiw")
+	e.ClearYankFlash()
+	if e.YankFlash() {
+		t.Fatal("flash survived being cleared")
+	}
+	if e.flashCovers(Pos{0, 0}) {
+		t.Fatal("cleared flash still covers text")
+	}
+}
+
+// A stale flash would paint over text that has since moved.
+func TestEditClearsAPendingFlash(t *testing.T) {
+	e := run(t, "foo bar", "yiw")
+	feed(t, e, "x")
+	if e.YankFlash() {
+		t.Fatal("the flash outlived the edit under it")
+	}
+}
+
+func TestYankFlashRendersDistinctlyFromSelection(t *testing.T) {
+	e := New("abcd")
+	e.SetBackground(colorful.Color{R: 0.05, G: 0.06, B: 0.14})
+
+	feed(t, e, "vl")
+	selected := e.Render(20, 3).Content
+	feed(t, e, "y")
+	flashed := e.Render(20, 3).Content
+
+	if selectionHex(t, selected) == selectionHex(t, flashed) {
+		t.Fatal("the yank flash is the same colour as the selection")
+	}
+}

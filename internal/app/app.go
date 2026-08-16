@@ -23,8 +23,15 @@ type tickMsg struct{}
 // last thing to happen for a while.
 const statusTicks = 7
 
+// flashDuration is how long a yank stays lit. Long enough to catch, short
+// enough that it never feels like a selection you have to dismiss.
+const flashDuration = 250 * time.Millisecond
+
 // fileChangedMsg carries the path a watcher saw change.
 type fileChangedMsg string
+
+// yankFlashDoneMsg puts out the highlight over a yank.
+type yankFlashDoneMsg struct{}
 
 // reloadDecision is what to do about a note changing underneath us.
 type reloadDecision int
@@ -113,6 +120,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ed.SetBackground(msg.Color)
 		return m, nil
 
+	case tea.FocusMsg:
+		// The theme may have changed while we were in the background.
+		return m, tea.RequestBackgroundColor
+
+	case yankFlashDoneMsg:
+		m.ed.ClearYankFlash()
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.ed.SetHeight(m.textHeight())
@@ -161,6 +176,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.ed.QuitRequested() {
 		return m.quit()
+	}
+	if m.ed.YankFlash() {
+		return tea.Tick(flashDuration, func(time.Time) tea.Msg { return yankFlashDoneMsg{} })
 	}
 	return nil
 }

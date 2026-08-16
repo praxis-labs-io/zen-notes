@@ -92,6 +92,14 @@ type blockPending struct {
 	insertedAt Pos
 }
 
+// flashRange is the span a yank briefly lights up.
+type flashRange struct {
+	active   bool
+	from, to Pos
+	linewise bool
+	block    bool
+}
+
 type snapshot struct {
 	lines  [][]rune
 	cursor Pos
@@ -149,6 +157,8 @@ type Editor struct {
 	dirty          bool
 	darkBackground bool
 	selection      lipgloss.Style
+	flashStyle     lipgloss.Style
+	flash          flashRange
 	quit           bool
 	saveWanted     bool
 }
@@ -164,6 +174,7 @@ func New(text string) *Editor {
 		// background is the louder mistake of the two.
 		darkBackground: true,
 		selection:      darkSelection,
+		flashStyle:     darkFlash,
 		height:         20,
 	}
 }
@@ -271,6 +282,7 @@ func (e *Editor) clampCursor() {
 }
 
 func (e *Editor) snapshot() {
+	e.flash = flashRange{}
 	e.undo = append(e.undo, snapshot{lines: e.buf.Lines(), cursor: e.cursor})
 	if len(e.undo) > undoDepth {
 		e.undo = e.undo[len(e.undo)-undoDepth:]
@@ -857,6 +869,7 @@ func (e *Editor) operateLines(op rune, from, to int) {
 	e.reg = register{text: strings.Join(lines, "\n"), linewise: true}
 
 	if op == 'y' {
+		e.flashYank(Pos{from, 0}, Pos{to, 0}, true, false)
 		e.reportYank(to-from+1, "line")
 		e.cursor = Pos{from, e.cursor.Col}
 		e.clampCursor()
@@ -898,6 +911,11 @@ func (e *Editor) operateChars(op rune, from, to Pos) {
 	}
 	if op == 'y' {
 		e.reg = register{text: e.textBetween(from, to)}
+		last := to
+		if last.Col > 0 {
+			last.Col--
+		}
+		e.flashYank(from, last, false, false)
 		e.reportYank(len([]rune(e.reg.text)), "char")
 		e.cursor = from
 		e.clampCursor()
