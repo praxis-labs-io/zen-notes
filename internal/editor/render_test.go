@@ -1,0 +1,203 @@
+package editor
+
+import (
+	"strings"
+	"testing"
+)
+
+// classLetters gives each token class a letter so a whole line's
+// classification reads as a string the same length as the line.
+var classLetters = map[tokenClass]rune{
+	tokPlain:     '.',
+	tokHeading:   'H',
+	tokStrong:    'B',
+	tokEmphasis:  'I',
+	tokCode:      'C',
+	tokMarker:    'M',
+	tokCheckDone: 'X',
+	tokCheckTodo: 'O',
+	tokLink:      'L',
+}
+
+func classString(classes []tokenClass) string {
+	var sb strings.Builder
+	for _, c := range classes {
+		sb.WriteRune(classLetters[c])
+	}
+	return sb.String()
+}
+
+func TestClassifyLine(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{"plain text", "plain", "....."},
+		{"atx heading", "# Title", "HHHHHHH"},
+		{"deeper heading", "### Sub", "HHHHHHH"},
+		{"hash without space is not a heading", "#nope", "....."},
+		{"bold", "**bo**", "BBBBBB"},
+		{"italic with stars", "*it*", "IIII"},
+		{"italic with underscores", "_it_", "IIII"},
+		{"inline code", "`c`", "CCC"},
+		{"bold inside text", "a **b** c", "..BBBBB.."},
+		{"dash bullet", "- item", "MM...."},
+		{"star bullet", "* item", "MM...."},
+		{"numbered list", "1. item", "MMM...."},
+		{"indented bullet", "  - item", "..MM...."},
+		{"blockquote", "> quote", "MM....."},
+		{"unchecked box", "- [ ] task", "MMOOO....."},
+		{"checked box", "- [x] task", "MMXXX....."},
+		{"link", "[text](url)", "LLLLLLLLLLL"},
+		{"fence marker", "```go", "MMMMM"},
+		{"empty line", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classString(classifyLine([]rune(tt.line), false))
+			if got != tt.want {
+				t.Errorf("classify(%q)\n got %q\nwant %q", tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+// Emphasis must still be found after a bold or code span earlier in the line,
+// where a naive left-to-right scan pairs the wrong stars.
+func TestClassifyEmphasisAfterOtherSpans(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{"after bold", "**b** *i*", "BBBBB.III"},
+		{"after code", "`c` *i*", "CCC.III"},
+		{"after bold and code", "**b** `c` *i*", "BBBBB.CCC.III"},
+		{"between bold spans", "**a** *i* **b**", "BBBBB.III.BBBBB"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classString(classifyLine([]rune(tt.line), false))
+			if got != tt.want {
+				t.Errorf("classify(%q)\n got %q\nwant %q", tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifyInsideFenceIsAllCode(t *testing.T) {
+	got := classString(classifyLine([]rune("# not a heading"), true))
+	if got != strings.Repeat("C", 15) {
+		t.Fatalf("got %q, want all code", got)
+	}
+}
+
+func TestClassifyBufferTracksFenceState(t *testing.T) {
+	b := NewBuffer("# head\n```\n# in code\n```\n# head")
+	got := classifyBuffer(b)
+
+	if classString(got[0]) != "HHHHHH" {
+		t.Errorf("line 0 = %q, want heading", classString(got[0]))
+	}
+	if classString(got[2]) != strings.Repeat("C", 9) {
+		t.Errorf("line 2 = %q, want all code", classString(got[2]))
+	}
+	if classString(got[4]) != "HHHHHH" {
+		t.Errorf("line 4 = %q, want heading again", classString(got[4]))
+	}
+}
+
+func TestClassifyUnclosedFenceRunsToTheEnd(t *testing.T) {
+	b := NewBuffer("```\nstill code\nmore code")
+	got := classifyBuffer(b)
+	if classString(got[2]) != strings.Repeat("C", 9) {
+		t.Fatalf("line 2 = %q, want all code", classString(got[2]))
+	}
+}
+
+func TestRowStarts(t *testing.T) {
+	tests := []struct {
+		name  string
+		line  string
+		width int
+		want  []int
+	}{
+		{"fits on one row", "hello", 10, []int{0}},
+		{"empty line", "", 10, []int{0}},
+		{"breaks at a space", "hello world", 5, []int{0, 6}},
+		{"breaks mid word when it must", "aaaaaaa", 3, []int{0, 3, 6}},
+		{"wraps at each space", "ab cd ef", 3, []int{0, 3, 6}},
+		{"keeps a long word whole until the row is full", "hi enormouslylong", 6, []int{0, 3, 9, 15}},
+		{"zero width degrades to one row", "hello", 0, []int{0}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := rowStarts([]rune(tt.line), tt.width)
+			if len(got) != len(tt.want) {
+				t.Fatalf("rowStarts = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("rowStarts = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestRowStartsAlwaysAdvances(t *testing.T) {
+	got := rowStarts([]rune("日本語"), 1)
+	if len(got) != 3 {
+		t.Fatalf("rowStarts = %v, want one row per wide rune", got)
+	}
+}
+
+func TestCursorRowAndColumn(t *testing.T) {
+	starts := rowStarts([]rune("hello world"), 5)
+	tests := []struct {
+		col     int
+		wantRow int
+		wantCol int
+	}{
+		{0, 0, 0},
+		{4, 0, 4},
+		{6, 1, 0},
+		{10, 1, 4},
+		{11, 1, 5},
+	}
+	for _, tt := range tests {
+		row, col := cursorRowCol([]rune("hello world"), starts, tt.col)
+		if row != tt.wantRow || col != tt.wantCol {
+			t.Errorf("cursorRowCol(%d) = %d, %d; want %d, %d", tt.col, row, col, tt.wantRow, tt.wantCol)
+		}
+	}
+}
+
+func TestCursorColumnCountsDisplayWidth(t *testing.T) {
+	runes := []rune("日本x")
+	_, col := cursorRowCol(runes, []int{0}, 2)
+	if col != 4 {
+		t.Fatalf("col = %d, want 4", col)
+	}
+}
+
+func TestScrollKeepsCursorVisible(t *testing.T) {
+	tests := []struct {
+		name             string
+		top, cursor, hgt int
+		want             int
+	}{
+		{"already visible", 0, 3, 10, 0},
+		{"cursor above the window", 10, 4, 10, 4},
+		{"cursor below the window", 0, 12, 10, 3},
+		{"never scrolls past the top", 5, 0, 10, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := scrollTo(tt.top, tt.cursor, tt.hgt); got != tt.want {
+				t.Errorf("scrollTo = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
