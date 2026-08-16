@@ -38,31 +38,27 @@ func GutterWidth(lineCount int) int {
 	return max(digits, 2) + 2
 }
 
-// gutter renders the number cell for one screen row. Wrapped continuation
-// rows get blanks, so a number always marks the start of a logical line.
+// gutter renders the number cell for one screen row. The cursor's line shows
+// its absolute number, every other line its distance, all in one column.
 func gutter(line, cursorLine, width int, first bool) string {
 	if !first {
 		return strings.Repeat(" ", width)
 	}
 	if line == cursorLine {
-		return currentStyle.Render(pad(strconv.Itoa(line+1), width, true))
+		return currentStyle.Render(pad(strconv.Itoa(line+1), width))
 	}
 	distance := line - cursorLine
 	if distance < 0 {
 		distance = -distance
 	}
-	return numberStyle.Render(pad(strconv.Itoa(distance), width, false))
+	return numberStyle.Render(pad(strconv.Itoa(distance), width))
 }
 
-// pad fits s into width, left aligned for the current line and right aligned
-// for the relative ones, always leaving a trailing space.
-func pad(s string, width int, left bool) string {
+// pad right aligns s in width, leaving a trailing space before the text.
+func pad(s string, width int) string {
 	room := width - 1
 	if len(s) > room {
 		s = s[len(s)-room:]
-	}
-	if left {
-		return s + strings.Repeat(" ", room-len(s)) + " "
 	}
 	return strings.Repeat(" ", room-len(s)) + s + " "
 }

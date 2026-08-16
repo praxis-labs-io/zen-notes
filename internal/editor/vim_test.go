@@ -701,6 +701,74 @@ func TestSetTextClearsDirty(t *testing.T) {
 	}
 }
 
+// Arrows stand in for hjkl everywhere, so counts, operators and visual mode
+// all work with them.
+func TestArrowsTakeCountsAndOperators(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"counted down", "a\nb\nc\nd", "3<down>x", "a\nb\nc\n"},
+		{"counted right", "abcdef", "3<right>x", "abcef"},
+		{"delete down is linewise", "a\nb\nc", "d<down>", "c"},
+		{"delete up is linewise", "a\nb\nc", "jjd<up>", "a"},
+		{"delete right", "abc", "d<right>", "bc"},
+		{"change down", "a\nb\nc", "c<down>X<esc>", "X\nc"},
+		{"counted operator", "a\nb\nc\nd", "d2<down>", "d"},
+		{"visual extends right", "abcdef", "v<right><right>d", "def"},
+		{"visual line extends down", "a\nb\nc", "V<down>d", "c"},
+		{"yank down then put", "a\nb", "y<down>Gp", "a\nb\na\nb"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestArrowsMoveTheCursorWithCounts(t *testing.T) {
+	e := run(t, "aaaa\nbbbb\ncccc\ndddd", "2<down><right><right>")
+	if e.Cursor() != (Pos{2, 2}) {
+		t.Fatalf("Cursor = %v, want {2 2}", e.Cursor())
+	}
+}
+
+func TestArrowRemembersTheColumnLikeJK(t *testing.T) {
+	e := run(t, "abcd\na\nabcd", "$<down><down>")
+	if e.Cursor() != (Pos{2, 3}) {
+		t.Fatalf("Cursor = %v, want {2 3}", e.Cursor())
+	}
+}
+
+// An arrow is a motion, never an argument, so it cancels a half-typed find
+// instead of being swallowed as the character to search for.
+func TestArrowCancelsAPendingFind(t *testing.T) {
+	e := run(t, "hello", "f<down>")
+	if e.Cursor() != (Pos{0, 0}) {
+		t.Fatalf("Cursor = %v, want {0 0}", e.Cursor())
+	}
+	if e.PendingKeys() != "" {
+		t.Fatalf("PendingKeys = %q, want the find abandoned", e.PendingKeys())
+	}
+
+	// Normal mode carries on, rather than still waiting for a target.
+	feed(t, e, "x")
+	if e.Text() != "ello" {
+		t.Fatalf("Text = %q, want ello", e.Text())
+	}
+}
+
+func TestArrowCancelsAPendingOperator(t *testing.T) {
+	e := run(t, "foo bar", "di<down>")
+	if e.Text() != "foo bar" {
+		t.Fatalf("Text = %q, want unchanged", e.Text())
+	}
+}
+
 func TestArrowKeysMoveInBothModes(t *testing.T) {
 	e := run(t, "abc\ndef", "<down><right>")
 	if e.Cursor() != (Pos{1, 1}) {

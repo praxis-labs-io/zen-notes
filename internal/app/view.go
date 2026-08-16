@@ -10,12 +10,10 @@ import (
 	"github.com/mattn/go-runewidth"
 )
 
-// chromeRows is the top border, the divider, the status line and the bottom
-// border: everything the text area does not get.
-const chromeRows = 4
+// chromeRows is the status line, the only row the note does not get.
+const chromeRows = 1
 
 var (
-	borderStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	fileStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	dirtyStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	messageStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
@@ -36,54 +34,30 @@ var modeStyles = map[editor.Mode]lipgloss.Style{
 }
 
 func (m *Model) textHeight() int { return max(m.height-chromeRows, 1) }
-func (m *Model) innerWidth() int { return max(m.width-2, 1) }
 
 func (m *Model) View() tea.View {
-	inner, height := m.innerWidth(), m.textHeight()
+	width, height := max(m.width, 1), m.textHeight()
 
 	var body []string
 	var cursor *tea.Cursor
 	if m.help {
-		body = helpLines(inner, height)
+		body = helpLines(width, height)
 	} else {
-		r := m.ed.Render(inner, height)
+		r := m.ed.Render(width, height)
 		body = strings.Split(r.Content, "\n")
 		cursor = m.cursor(r)
 	}
 
-	v := tea.NewView(m.frame(body, inner))
+	v := tea.NewView(strings.Join(append(body, m.statusBar(width)), "\n"))
 	v.AltScreen = true
 	v.Cursor = cursor
 	return v
 }
 
-// frame draws the rounded box, with a divider separating the note from the
-// status line.
-func (m *Model) frame(body []string, inner int) string {
-	bar := strings.Repeat("─", inner)
-	out := []string{borderStyle.Render("╭" + bar + "╮")}
-
-	for _, row := range body {
-		out = append(out, m.edge(row, inner))
-	}
-	out = append(out, borderStyle.Render("├"+bar+"┤"))
-	out = append(out, m.edge(m.statusBar(inner), inner))
-	out = append(out, borderStyle.Render("╰"+bar+"╯"))
-	return strings.Join(out, "\n")
-}
-
-// edge pads a row to the inner width and wraps it in the side borders.
-func (m *Model) edge(row string, inner int) string {
-	if gap := inner - ansi.StringWidth(row); gap > 0 {
-		row += strings.Repeat(" ", gap)
-	}
-	return borderStyle.Render("│") + row + borderStyle.Render("│")
-}
-
 // statusBar puts the mode bottom left and the note's filename hard right.
-func (m *Model) statusBar(inner int) string {
+func (m *Model) statusBar(width int) string {
 	if cmd := m.ed.CommandLine(); cmd != "" {
-		return " " + cmd
+		return cmd
 	}
 
 	left := []string{modeStyles[m.ed.Mode()].Render(m.ed.Mode().String())}
@@ -97,9 +71,9 @@ func (m *Model) statusBar(inner int) string {
 		left = append(left, pendingStyle.Render(keys))
 	}
 
-	l := " " + strings.Join(left, "  ")
-	r := fileStyle.Render(m.day.String()+".md") + " "
-	gap := inner - ansi.StringWidth(l) - ansi.StringWidth(r)
+	l := strings.Join(left, "  ")
+	r := fileStyle.Render(m.day.String() + ".md")
+	gap := width - ansi.StringWidth(l) - ansi.StringWidth(r)
 	if gap < 1 {
 		return l
 	}
@@ -110,11 +84,11 @@ func (m *Model) statusBar(inner int) string {
 // own cursor color applies, and the shape says which mode you are in.
 func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
 	if cmd := m.ed.CommandLine(); cmd != "" {
-		c := tea.NewCursor(1+runewidth.StringWidth(cmd), m.textHeight()+2)
+		c := tea.NewCursor(runewidth.StringWidth(cmd), m.textHeight())
 		c.Shape = tea.CursorBar
 		return c
 	}
-	c := tea.NewCursor(r.CursorCol+1, r.CursorRow+1)
+	c := tea.NewCursor(r.CursorCol, r.CursorRow)
 	c.Shape = tea.CursorBlock
 	if m.ed.Mode() == editor.ModeInsert {
 		c.Shape = tea.CursorBar
@@ -140,13 +114,14 @@ var helpColumns = [2][]helpGroup{
 		}},
 		{"Move", [][2]string{
 			{"h j k l", "left down up right"},
+			{"arrows", "same as h j k l"},
 			{"w b e", "by word"},
 			{"0 ^ $", "line ends"},
 			{"gg G", "buffer ends"},
 			{"{ }", "paragraphs"},
 			{"f t F T", "find in line"},
 			{"; ,", "repeat find"},
-			{"ctrl+d ctrl+u", "half page"},
+			{"ctrl+d/u", "half page"},
 		}},
 	},
 	{
@@ -193,9 +168,16 @@ func helpLines(width, height int) []string {
 	return fit(out, height)
 }
 
-// renderHelpColumn turns one column's groups into styled lines.
+// renderHelpColumn turns one column's groups into styled lines, sizing the
+// key column to its longest key so every description starts in one place.
 func renderHelpColumn(groups []helpGroup, width int) []string {
-	keyWidth := min(13, max(width/2, 8))
+	keyWidth := 0
+	for _, g := range groups {
+		for _, k := range g.keys {
+			keyWidth = max(keyWidth, runewidth.StringWidth(k[0])+2)
+		}
+	}
+	keyWidth = min(keyWidth, max(width/2, 8))
 	var out []string
 	for _, g := range groups {
 		if len(out) > 0 {

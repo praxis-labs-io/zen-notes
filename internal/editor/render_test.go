@@ -253,7 +253,7 @@ func TestGutterShowsHybridLineNumbers(t *testing.T) {
 	feed(t, e, "jj")
 
 	rows := strings.Split(ansi.Strip(e.Render(30, 10).Content), "\n")
-	want := []string{"  2 one", "  1 two", "3   three", "  1 four"}
+	want := []string{"  2 one", "  1 two", "  3 three", "  1 four"}
 	for i, w := range want {
 		if !strings.HasPrefix(rows[i], w) {
 			t.Errorf("row %d = %q, want prefix %q", i, rows[i], w)
@@ -275,7 +275,7 @@ func TestGutterIsBlankOnWrappedRows(t *testing.T) {
 	e := New("hello world this wraps")
 
 	rows := strings.Split(ansi.Strip(e.Render(14, 10).Content), "\n")
-	if !strings.HasPrefix(rows[0], "1  ") {
+	if !strings.HasPrefix(rows[0], "  1 ") {
 		t.Fatalf("row 0 = %q, want a line number", rows[0])
 	}
 	if strings.TrimSpace(strings.SplitN(rows[1], " ", 2)[0]) != "" {

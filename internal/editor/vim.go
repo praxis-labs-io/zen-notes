@@ -408,8 +408,17 @@ func (e *Editor) runCommand(cmd string) {
 
 func (e *Editor) normalKey(k Key) {
 	if k.Name != "" {
-		e.namedNormalKey(k.Name)
-		return
+		motion, ok := arrowMotion(k.Name)
+		if !ok {
+			e.namedNormalKey(k.Name)
+			return
+		}
+		// An arrow is never an argument, so it cancels a half-typed f or i.
+		if e.pend.await != 0 {
+			e.pend = pending{}
+			return
+		}
+		k = Rune(motion)
 	}
 	r := k.R
 	if r == 0 {
@@ -450,12 +459,6 @@ func (e *Editor) namedNormalKey(name string) {
 		if e.mode.Visual() {
 			e.mode = ModeNormal
 		}
-	case "up":
-		e.moveVertical(-1)
-	case "down":
-		e.moveVertical(1)
-	case "left", "right":
-		e.arrow(name)
 	case "c-d":
 		e.halfPage(1)
 	case "c-u":
@@ -466,6 +469,22 @@ func (e *Editor) namedNormalKey(name string) {
 		e.startVisual(ModeVisualBlock)
 		e.pend = pending{}
 	}
+}
+
+// arrowMotion maps an arrow key onto the hjkl it stands in for, so counts,
+// operators and visual mode work the same either way.
+func arrowMotion(name string) (rune, bool) {
+	switch name {
+	case "up":
+		return 'k', true
+	case "down":
+		return 'j', true
+	case "left":
+		return 'h', true
+	case "right":
+		return 'l', true
+	}
+	return 0, false
 }
 
 func (e *Editor) halfPage(dir int) {

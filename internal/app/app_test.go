@@ -387,11 +387,10 @@ func TestCursorTracksTheCaret(t *testing.T) {
 	m := newTestModel(t, "hello\nworld")
 	press(m, "j", "l", "l")
 
-	// One column for the border, plus the line-number gutter.
 	c := m.View().Cursor
-	wantX := 2 + 1 + editor.GutterWidth(2)
-	if c == nil || c.X != wantX || c.Y != 2 {
-		t.Fatalf("cursor = %v, want X %d Y 2", c, wantX)
+	wantX := 2 + editor.GutterWidth(2)
+	if c == nil || c.X != wantX || c.Y != 1 {
+		t.Fatalf("cursor = %v, want X %d Y 1", c, wantX)
 	}
 }
 
@@ -403,41 +402,40 @@ func TestCursorMovesToTheCommandLine(t *testing.T) {
 	if c == nil {
 		t.Fatal("no cursor reported")
 	}
-	if c.Y != m.textHeight()+2 {
-		t.Fatalf("cursor Y = %d, want the status row %d", c.Y, m.textHeight()+2)
+	if c.Y != m.textHeight() {
+		t.Fatalf("cursor Y = %d, want the status row %d", c.Y, m.textHeight())
 	}
-	if c.X != 1+len(":wq") {
-		t.Fatalf("cursor X = %d, want %d", c.X, 1+len(":wq"))
+	if c.X != len(":wq") {
+		t.Fatalf("cursor X = %d, want %d", c.X, len(":wq"))
 	}
 	if c.Shape != tea.CursorBar {
 		t.Fatalf("shape = %v, want a bar on the command line", c.Shape)
 	}
 }
 
-func TestFrameHasARoundedBorderAndDivider(t *testing.T) {
+func TestNoBordersAnywhere(t *testing.T) {
 	m := newTestModel(t, "hello")
-	rows := strings.Split(ansi.Strip(m.View().Content), "\n")
-
-	if len(rows) != 24 {
-		t.Fatalf("frame is %d rows, want 24", len(rows))
-	}
-	if !strings.HasPrefix(rows[0], "╭") || !strings.HasSuffix(rows[0], "╮") {
-		t.Errorf("top = %q, want a rounded top", rows[0])
-	}
-	if !strings.HasPrefix(rows[len(rows)-1], "╰") {
-		t.Errorf("bottom = %q, want a rounded bottom", rows[len(rows)-1])
-	}
-	divider := rows[m.textHeight()+1]
-	if !strings.HasPrefix(divider, "├") || !strings.HasSuffix(divider, "┤") {
-		t.Errorf("divider = %q, want a divider above the status line", divider)
+	out := ansi.Strip(m.View().Content)
+	for _, glyph := range []string{"╭", "╮", "╰", "╯", "├", "┤", "│", "─"} {
+		if strings.Contains(out, glyph) {
+			t.Errorf("view still draws %q", glyph)
+		}
 	}
 }
 
-func TestEveryFrameRowIsTheFullWidth(t *testing.T) {
+func TestViewIsExactlyTheTerminalHeight(t *testing.T) {
+	m := newTestModel(t, "hello\nworld")
+	rows := strings.Split(m.View().Content, "\n")
+	if len(rows) != 24 {
+		t.Fatalf("view is %d rows, want 24", len(rows))
+	}
+}
+
+func TestNoRowOverflowsTheWidth(t *testing.T) {
 	m := newTestModel(t, "hello\nworld")
 	for i, row := range strings.Split(m.View().Content, "\n") {
-		if got := ansi.StringWidth(row); got != 80 {
-			t.Errorf("row %d is %d wide, want 80", i, got)
+		if got := ansi.StringWidth(row); got > 80 {
+			t.Errorf("row %d is %d wide, want at most 80", i, got)
 		}
 	}
 }
@@ -445,13 +443,16 @@ func TestEveryFrameRowIsTheFullWidth(t *testing.T) {
 func TestStatusPutsTheFilenameHardRight(t *testing.T) {
 	m := newTestModel(t, "hello")
 	rows := strings.Split(ansi.Strip(m.View().Content), "\n")
-	status := rows[m.textHeight()+2]
+	status := rows[m.textHeight()]
 
-	if !strings.HasSuffix(status, m.day.String()+".md │") {
+	if !strings.HasSuffix(status, m.day.String()+".md") {
 		t.Fatalf("status = %q, want the filename hard right", status)
 	}
-	if !strings.Contains(status, "│ NORMAL") {
+	if !strings.HasPrefix(status, "NORMAL") {
 		t.Fatalf("status = %q, want the mode bottom left", status)
+	}
+	if ansi.StringWidth(status) != 80 {
+		t.Fatalf("status is %d wide, want the full 80", ansi.StringWidth(status))
 	}
 }
 
@@ -490,7 +491,7 @@ func TestHelpModalOpensAndCloses(t *testing.T) {
 // The binding list is the whole point of the modal, so none of it may be
 // clipped at the sizes a note gets written in.
 func TestHelpFitsWithoutClipping(t *testing.T) {
-	for _, size := range [][2]int{{80, 24}, {72, 20}, {100, 30}, {120, 40}} {
+	for _, size := range [][2]int{{72, 20}, {80, 24}, {90, 24}, {100, 30}, {120, 40}} {
 		m := newTestModel(t, "")
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		press(m, "?")
@@ -501,7 +502,7 @@ func TestHelpFitsWithoutClipping(t *testing.T) {
 				t.Errorf("%dx%d: help is missing the %s group", size[0], size[1], group)
 			}
 		}
-		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "ZZ", "left down up right", "quote, paren, para"} {
+		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
 			if !strings.Contains(out, key) {
 				t.Errorf("%dx%d: help is missing %q", size[0], size[1], key)
 			}
@@ -514,8 +515,8 @@ func TestHelpStaysInsideTheFrame(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 72, Height: 20})
 	press(m, "?")
 	for i, row := range strings.Split(m.View().Content, "\n") {
-		if got := ansi.StringWidth(row); got != 72 {
-			t.Errorf("help row %d is %d wide, want 72", i, got)
+		if got := ansi.StringWidth(row); got > 72 {
+			t.Errorf("help row %d is %d wide, want at most 72", i, got)
 		}
 	}
 }

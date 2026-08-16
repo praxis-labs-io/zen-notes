@@ -41,7 +41,8 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 | | |
 |---|---|
-| `h j k l`, arrows | move |
+| `h j k l` | move |
+| arrows | stand in for `hjkl`, counts and operators included |
 | `w W b B e E` | by word |
 | `0 ^ $` | line start, first non-blank, line end |
 | `gg G`, `{ }` | buffer ends, paragraphs |
@@ -69,10 +70,10 @@ glamour rendering in normal mode.
 
 ## Looks
 
-A rounded border with the note below it and the status line under a divider.
-The mode sits bottom left and changes color per mode; the filename sits hard
-right. Line numbers are hybrid, absolute on the cursor's line and relative
-everywhere else, in a gutter that is always reserved so text never shifts.
+No borders. The note, then a status line: the mode bottom left, colored per
+mode, and the filename hard right. Line numbers are hybrid, absolute on the
+cursor's line and relative everywhere else, all in one column, in a gutter
+that is always reserved so text never shifts.
 
 Everything is drawn in ANSI base colors, so the note takes its palette from
 your terminal theme rather than fighting it. The caret is the real terminal
