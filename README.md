@@ -1,7 +1,7 @@
 # zen-notes
 
-One notepad per day. Run `zen` from anywhere and you land in today's note,
-already open. Two terminals on the same day stay in sync.
+One notepad per day. Run `zen-notes` from anywhere and you land in today's
+note, already open. Two terminals on the same day stay in sync.
 
 Markdown, syntax highlighted as you type, edited with vim motions. Nothing
 else.
@@ -9,7 +9,13 @@ else.
 ## Install
 
 ```
-go install github.com/drucial/zen-notes@latest
+GOBIN=$HOME/.local/bin go install .
+```
+
+Then run it from anywhere:
+
+```
+zen-notes
 ```
 
 ## Storage

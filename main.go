@@ -1,5 +1,5 @@
-// Command zen opens today's note. One markdown file per day, edited with vim
-// motions, autosaved, and reloaded when another window writes it.
+// Command zen-notes opens today's note. One markdown file per day, edited with
+// vim motions, autosaved, and reloaded when another window writes it.
 package main
 
 import (
@@ -17,7 +17,7 @@ func main() {
 	flag.Parse()
 
 	if err := run(*dir); err != nil {
-		fmt.Fprintln(os.Stderr, "zen:", err)
+		fmt.Fprintln(os.Stderr, "zen-notes:", err)
 		os.Exit(1)
 	}
 }
