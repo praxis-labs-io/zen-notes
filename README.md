@@ -48,6 +48,7 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `gg G`, `{ }` | buffer ends, paragraphs |
 | `f F t T` | find on the line |
 | `; ,` | repeat that find, forward and back |
+| `/` | search, `n` and `N` to walk the matches |
 | `%` | matching bracket |
 | `H M L` | top, middle, bottom of the window |
 | `zt zz zb` | scroll the cursor's line to top, centre, bottom |
@@ -72,9 +73,12 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 Counts work: `3j`, `d2w`, `2dd`.
 
-Not in yet: `.` repeat, `/` search with `n`/`N`, named registers, marks,
-macros, the jumplist, and glamour rendering in normal mode. Of those, `.`
-and `/` are the two you will miss first.
+Search is a plain substring, not a regular expression, and it ignores case
+unless the pattern carries a capital. Matches stay lit until `esc`. There is
+no `?` for a backward search, because `?` opens the binding list; `N` walks
+backward instead.
+
+Not in yet: `.` repeat, named registers, marks, macros, and the jumplist.
 
 ## Looks
 

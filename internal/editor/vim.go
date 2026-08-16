@@ -17,6 +17,7 @@ const (
 	ModeVisualLine
 	ModeVisualBlock
 	ModeCommand
+	ModeSearch
 )
 
 func (m Mode) String() string {
@@ -31,6 +32,8 @@ func (m Mode) String() string {
 		return "V-BLOCK"
 	case ModeCommand:
 		return "COMMAND"
+	case ModeSearch:
+		return "SEARCH"
 	default:
 		return "NORMAL"
 	}
@@ -144,6 +147,7 @@ type Editor struct {
 	message     string
 	lastFind    find
 	blockInsert blockPending
+	search      search
 
 	undo []snapshot
 	redo []snapshot
@@ -228,10 +232,13 @@ func (e *Editor) ClearMessage() { e.message = "" }
 
 // CommandLine is the ":" line being typed, empty outside command mode.
 func (e *Editor) CommandLine() string {
-	if e.mode != ModeCommand {
-		return ""
+	switch e.mode {
+	case ModeCommand:
+		return ":" + string(e.cmdline)
+	case ModeSearch:
+		return "/" + string(e.cmdline)
 	}
-	return ":" + string(e.cmdline)
+	return ""
 }
 
 // PendingKeys is the half-typed command, for the status bar.
@@ -245,6 +252,7 @@ func (e *Editor) SetText(text string) {
 	e.clampCursor()
 	e.undo, e.redo = nil, nil
 	e.dirty = false
+	e.refreshMatches()
 }
 
 // Selection is the visual range as an ordered pair, and whether it is
@@ -264,6 +272,8 @@ func (e *Editor) Feed(k Key) {
 		e.insertKey(k)
 	case ModeCommand:
 		e.commandKey(k)
+	case ModeSearch:
+		e.searchKey(k)
 	default:
 		e.normalKey(k)
 	}
@@ -485,7 +495,9 @@ func (e *Editor) namedNormalKey(name string) {
 		if e.mode.Visual() {
 			e.rememberVisual()
 			e.mode = ModeNormal
+			return
 		}
+		e.clearSearch()
 	case "c-d":
 		e.halfPage(1)
 	case "c-u":
@@ -1043,6 +1055,12 @@ func (e *Editor) command(r rune) {
 	case ':':
 		e.mode = ModeCommand
 		e.cmdline = nil
+	case '/':
+		e.startSearch()
+	case 'n':
+		e.jumpToMatch(false)
+	case 'N':
+		e.jumpToMatch(true)
 	case 'Z':
 		e.pend.await = 'Z'
 	}

@@ -158,6 +158,7 @@ func (e *Editor) Render(width, height int) Rendered {
 	gw := GutterWidth(e.buf.LineCount())
 	textWidth := max(width-gw, 1)
 
+	e.refreshMatches()
 	classes := classifyBuffer(e.buf)
 	rows, cursorRow, cursorCol := e.layout(textWidth)
 	e.rows, e.cursorRow = rows, cursorRow
@@ -224,6 +225,8 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
 			style = e.flashStyle
 		case e.selected(Pos{row.line, i}, selFrom, selTo, selLines):
 			style = e.selectionStyle()
+		case e.matchCovers(Pos{row.line, i}):
+			style = e.selectionStyle().Bold(true)
 		}
 		sb.WriteString(style.Render(string(runes[i])))
 		col += w

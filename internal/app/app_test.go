@@ -504,6 +504,39 @@ func TestBackgroundIsRequeriedOnFocus(t *testing.T) {
 	}
 }
 
+func TestSearchWorksThroughTheAppKeys(t *testing.T) {
+	m := newTestModel(t, "alpha\nbeta\ngamma")
+	press(m, "/", "b", "e", "t", "a")
+	if m.ed.CommandLine() != "/beta" {
+		t.Fatalf("CommandLine = %q, want /beta", m.ed.CommandLine())
+	}
+
+	m.Update(keyMsg("enter"))
+	if m.ed.Cursor().Line != 1 {
+		t.Fatalf("cursor line = %d, want 1", m.ed.Cursor().Line)
+	}
+	if !strings.Contains(ansi.Strip(m.View().Content), "SEARCH") &&
+		!strings.Contains(ansi.Strip(m.View().Content), "NORMAL") {
+		t.Fatal("status bar lost its mode")
+	}
+}
+
+func TestSearchLineShowsInTheStatusBar(t *testing.T) {
+	m := newTestModel(t, "alpha")
+	press(m, "/", "a")
+	if !strings.Contains(ansi.Strip(m.View().Content), "/a") {
+		t.Fatal("the search line is not on screen")
+	}
+}
+
+func TestSlashIsLiteralInInsertMode(t *testing.T) {
+	m := newTestModel(t, "")
+	press(m, "i", "/", "x")
+	if m.ed.Text() != "/x" {
+		t.Fatalf("Text = %q, want a literal slash", m.ed.Text())
+	}
+}
+
 func TestNoBordersAnywhere(t *testing.T) {
 	m := newTestModel(t, "hello")
 	out := ansi.Strip(m.View().Content)

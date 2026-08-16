@@ -31,6 +31,7 @@ var modeStyles = map[editor.Mode]lipgloss.Style{
 	editor.ModeVisualLine:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5")),
 	editor.ModeVisualBlock: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5")),
 	editor.ModeCommand:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")),
+	editor.ModeSearch:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")),
 }
 
 func (m *Model) textHeight() int { return max(m.height-chromeRows, 1) }
@@ -121,6 +122,7 @@ var helpColumns = [2][]helpGroup{
 			{"{ }", "paragraphs"},
 			{"f t F T", "find in line"},
 			{"; ,", "repeat find"},
+			{"/ n N", "search, next, prev"},
 			{"%", "matching bracket"},
 			{"H M L", "top, middle, bottom"},
 			{"zt zz zb", "scroll line to"},
