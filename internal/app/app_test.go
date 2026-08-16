@@ -413,6 +413,63 @@ func TestCursorMovesToTheCommandLine(t *testing.T) {
 	}
 }
 
+// A status message is a flash: it has to clear itself, because the thing
+// that set it may be the last thing that happens for a long while.
+func TestStatusExpiresOnItsOwn(t *testing.T) {
+	m := newTestModel(t, "original")
+	writeFromElsewhere(t, m, "from elsewhere")
+	m.Update(fileChangedMsg(m.store.Path(m.day)))
+
+	if m.status != "reloaded" {
+		t.Fatalf("status = %q, want reloaded", m.status)
+	}
+
+	// Idle: nothing but the save tick, no keys pressed.
+	for range statusTicks {
+		m.Update(tickMsg{})
+	}
+	if m.status != "" {
+		t.Fatalf("status = %q, want it cleared after idling", m.status)
+	}
+}
+
+func TestStatusSurvivesLongEnoughToRead(t *testing.T) {
+	m := newTestModel(t, "today")
+	press(m, "[")
+	if m.status == "" {
+		t.Fatal("no message to start with")
+	}
+
+	m.Update(tickMsg{})
+	if m.status == "" {
+		t.Fatal("the message vanished after a single tick")
+	}
+}
+
+func TestAKeypressAlsoClearsTheStatus(t *testing.T) {
+	m := newTestModel(t, "today")
+	press(m, "[")
+	if m.status == "" {
+		t.Fatal("no message to start with")
+	}
+
+	press(m, "j")
+	if m.status != "" {
+		t.Fatalf("status = %q, want a keypress to dismiss it", m.status)
+	}
+}
+
+func TestExpiredStatusLeavesTheStatusBar(t *testing.T) {
+	m := newTestModel(t, "today")
+	press(m, "[")
+	for range statusTicks {
+		m.Update(tickMsg{})
+	}
+	if strings.Contains(ansi.Strip(m.View().Content), "no earlier note") {
+		t.Fatal("the flash is still on screen after expiring")
+	}
+}
+
 func TestNoBordersAnywhere(t *testing.T) {
 	m := newTestModel(t, "hello")
 	out := ansi.Strip(m.View().Content)

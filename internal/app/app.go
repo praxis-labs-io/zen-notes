@@ -18,6 +18,11 @@ const saveInterval = 500 * time.Millisecond
 
 type tickMsg struct{}
 
+// statusTicks is how many save ticks a flash message survives, a little over
+// three seconds. It expires on its own because whatever set it may be the
+// last thing to happen for a while.
+const statusTicks = 7
+
 // fileChangedMsg carries the path a watcher saw change.
 type fileChangedMsg string
 
@@ -52,6 +57,7 @@ type Model struct {
 	followToday bool
 	lastWritten string
 	status      string
+	statusLeft  int
 	help        bool
 
 	width, height int
@@ -113,6 +119,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
+		m.expireStatus()
 		m.autosave()
 		m.checkRollover()
 		return m, tick()
@@ -142,11 +149,11 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.ed.Mode() == editor.ModeNormal && m.browseKey(key) {
 		return nil
 	}
-	m.status = ""
+	m.clearStatus()
 	m.ed.Feed(key)
 
 	if msg := m.ed.Message(); msg != "" {
-		m.status = msg
+		m.setStatus(msg)
 		m.ed.ClearMessage()
 	}
 	if m.ed.TakeSaveRequest() {
@@ -184,11 +191,11 @@ func (m *Model) step(find func(note.Day) (note.Day, bool, error), missing string
 	m.save()
 	day, ok, err := find(m.day)
 	if err != nil {
-		m.status = err.Error()
+		m.setStatus(err.Error())
 		return
 	}
 	if !ok {
-		m.status = missing
+		m.setStatus(missing)
 		return
 	}
 	m.open(day, day == note.Today())
@@ -200,7 +207,7 @@ func (m *Model) open(day note.Day, follow bool) {
 	m.save()
 	text, err := m.store.Load(day)
 	if err != nil {
-		m.status = err.Error()
+		m.setStatus(err.Error())
 		return
 	}
 	m.day = day
@@ -208,7 +215,29 @@ func (m *Model) open(day note.Day, follow bool) {
 	m.lastWritten = text
 	m.ed.SetText(text)
 	m.ed.SetCursor(editor.Pos{})
+	m.clearStatus()
+}
+
+// setStatus shows a flash message and starts its countdown.
+func (m *Model) setStatus(s string) {
+	m.status = s
+	m.statusLeft = statusTicks
+}
+
+func (m *Model) clearStatus() {
 	m.status = ""
+	m.statusLeft = 0
+}
+
+// expireStatus counts a flash down and drops it when it runs out.
+func (m *Model) expireStatus() {
+	if m.statusLeft == 0 {
+		return
+	}
+	m.statusLeft--
+	if m.statusLeft == 0 {
+		m.status = ""
+	}
 }
 
 func (m *Model) autosave() {
@@ -223,7 +252,7 @@ func (m *Model) save() {
 	}
 	text := m.ed.Text()
 	if err := m.store.Save(m.day, text); err != nil {
-		m.status = err.Error()
+		m.setStatus(err.Error())
 		return
 	}
 	m.lastWritten = text
@@ -248,7 +277,7 @@ func (m *Model) reload(path string) {
 	}
 	disk, err := m.store.Load(m.day)
 	if err != nil {
-		m.status = err.Error()
+		m.setStatus(err.Error())
 		return
 	}
 
@@ -256,13 +285,13 @@ func (m *Model) reload(path string) {
 	case reloadIgnore:
 		return
 	case reloadKeepLocal:
-		m.status = "changed elsewhere, keeping your edits"
+		m.setStatus("changed elsewhere, keeping your edits")
 	case reloadApply:
 		cursor := m.ed.Cursor()
 		m.ed.SetText(disk)
 		m.ed.SetCursor(cursor)
 		m.lastWritten = disk
-		m.status = "reloaded"
+		m.setStatus("reloaded")
 	}
 }
 
