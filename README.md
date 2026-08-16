@@ -9,7 +9,14 @@ else.
 ## Install
 
 ```
-GOBIN=$HOME/.local/bin go install .
+go install github.com/drucial/zen-notes@latest
+```
+
+That drops the binary in `$GOBIN`, or `$GOPATH/bin` if that is unset. To put
+it somewhere else:
+
+```
+GOBIN=$HOME/.local/bin go install github.com/drucial/zen-notes@latest
 ```
 
 Then run it from anywhere:
@@ -18,7 +25,9 @@ Then run it from anywhere:
 zen-notes
 ```
 
-## Storage
+Go 1.26 or later. No other runtime dependency.
+
+## Storage and sync
 
 Notes live in `$ZEN_NOTES_DIR`, or `~/.zen-notes` if that is unset. One file
 per day, named `2026-08-16.md`. Point the variable at an iCloud or Dropbox
@@ -32,6 +41,8 @@ says so. Last write wins, nothing is merged.
 
 Past midnight the app moves to the new day on its own, unless you have browsed
 away from today.
+
+There is one flag, `-dir`, which overrides `$ZEN_NOTES_DIR` for a single run.
 
 ## Keys
 
@@ -76,9 +87,8 @@ Counts work: `3j`, `d2w`, `2dd`.
 Search is incremental: the cursor and the highlight follow along as you type,
 and `esc` puts the cursor back where you started. It matches a plain substring
 rather than a regular expression, and ignores case unless the pattern carries
-a capital. Matches stay lit until `esc`. There is
-no `?` for a backward search, because `?` opens the binding list; `N` walks
-backward instead.
+a capital. Matches stay lit until `esc`. There is no `?` for a backward
+search, because `?` opens the binding list; `N` walks backward instead.
 
 Not in yet: `.` repeat, named registers, marks, macros, and the jumplist.
 
@@ -93,21 +103,29 @@ No color is hardcoded. Text, gutter, status bar and help all use ANSI slots
 0 to 15, so they come from your terminal theme. The caret is the real
 terminal cursor, in your cursor color: a block in normal, a bar in insert.
 
-The selection and the yank flash are the two computed colors. Both need a
-background a step off your own, so zen-notes asks the terminal for its
-background and shifts the lightness while keeping the hue, which keeps them
-inside your theme. A step near white reads stronger than the same step near
-black, so light themes get a smaller one. The background is asked for again
-whenever the window regains focus, so switching theme mid-session is picked
-up. If the terminal will not answer, and some multiplexers will not, it falls
-back to a neutral grey and assumes dark.
+The selection, the yank flash and the search highlight are the three computed
+colors. Each needs a background a step off your own, so zen-notes asks the
+terminal for its background and shifts the lightness while keeping the hue,
+which keeps them inside your theme. A step near white reads stronger than the
+same step near black, so light themes get a smaller one. The background is
+asked for again whenever the window regains focus, so switching theme
+mid-session is picked up. If the terminal will not answer, and some
+multiplexers will not, it falls back to a neutral grey and assumes dark.
 
 A yank changes nothing on screen, so what it took lights up for a moment and
 the status bar says how much.
 
-## Development
+## Contributing
 
-```
-go test ./...
-go vet ./...
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, the test conventions,
+and what is deliberately out of scope.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+Built on [Bubble Tea](https://github.com/charmbracelet/bubbletea) and
+[Lipgloss](https://github.com/charmbracelet/lipgloss) (MIT),
+[fsnotify](https://github.com/fsnotify/fsnotify) (BSD-3-Clause),
+[go-colorful](https://github.com/lucasb-eyer/go-colorful) and
+[go-runewidth](https://github.com/mattn/go-runewidth) (MIT).
