@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -253,10 +254,31 @@ func TestGutterShowsHybridLineNumbers(t *testing.T) {
 	feed(t, e, "jj")
 
 	rows := strings.Split(ansi.Strip(e.Render(30, 10).Content), "\n")
-	want := []string{"  2 one", "  1 two", "  3 three", "  1 four"}
+	want := []string{" 2 one", " 1 two", " 3 three", " 1 four"}
 	for i, w := range want {
 		if !strings.HasPrefix(rows[i], w) {
 			t.Errorf("row %d = %q, want prefix %q", i, rows[i], w)
+		}
+	}
+}
+
+// The gutter is sized from the line count, so the absolute number on the
+// cursor's line always fits, at every size, without shifting the text.
+func TestGutterFitsTheCurrentLineNumberAtAnyLength(t *testing.T) {
+	for _, lines := range []int{9, 10, 99, 100, 250, 1000, 4321} {
+		e := New(strings.TrimSuffix(strings.Repeat("x\n", lines), "\n"))
+		feed(t, e, "G")
+
+		gw := GutterWidth(lines)
+		rows := strings.Split(ansi.Strip(e.Render(40, 3).Content), "\n")
+		want := strconv.Itoa(lines)
+
+		cell := rows[len(rows)-1][:gw]
+		if strings.TrimSpace(cell) != want {
+			t.Errorf("%d lines: gutter cell %q, want the number %q", lines, cell, want)
+		}
+		if !strings.HasSuffix(cell, " ") {
+			t.Errorf("%d lines: gutter cell %q has no space before the text", lines, cell)
 		}
 	}
 }
@@ -275,7 +297,7 @@ func TestGutterIsBlankOnWrappedRows(t *testing.T) {
 	e := New("hello world this wraps")
 
 	rows := strings.Split(ansi.Strip(e.Render(14, 10).Content), "\n")
-	if !strings.HasPrefix(rows[0], "  1 ") {
+	if !strings.HasPrefix(rows[0], " 1 ") {
 		t.Fatalf("row 0 = %q, want a line number", rows[0])
 	}
 	if strings.TrimSpace(strings.SplitN(rows[1], " ", 2)[0]) != "" {
@@ -347,5 +369,23 @@ func TestScrollKeepsCursorVisible(t *testing.T) {
 				t.Errorf("scrollTo = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+// The terminal is asked for its background, but the answer can be slow or
+// never arrive. Dark is the safer assumption in the meantime.
+func TestSelectionAssumesDarkUntilToldOtherwise(t *testing.T) {
+	e := New("abcd")
+	feed(t, e, "vl")
+
+	dark := e.Render(20, 3).Content
+	e.SetDarkBackground(false)
+	light := e.Render(20, 3).Content
+
+	if dark == light {
+		t.Fatal("the selection ignores the terminal background")
+	}
+	if !strings.Contains(dark, "237") {
+		t.Errorf("default selection = %q, want the dark one", ansi.Strip(dark))
 	}
 }

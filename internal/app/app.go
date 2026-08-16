@@ -80,7 +80,7 @@ func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(tick(), waitForChange(m.watch))
+	return tea.Batch(tick(), waitForChange(m.watch), tea.RequestBackgroundColor)
 }
 
 func tick() tea.Cmd {
@@ -103,6 +103,10 @@ func waitForChange(w *note.Watcher) tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.ed.SetDarkBackground(msg.IsDark())
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.ed.SetHeight(m.textHeight())

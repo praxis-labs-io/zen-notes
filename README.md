@@ -48,11 +48,18 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `gg G`, `{ }` | buffer ends, paragraphs |
 | `f F t T` | find on the line |
 | `; ,` | repeat that find, forward and back |
+| `%` | matching bracket |
+| `H M L` | top, middle, bottom of the window |
+| `zt zz zb` | scroll the cursor's line to top, centre, bottom |
 | `ctrl+d ctrl+u` | half page |
 | `i a I A o O` | insert |
 | `d c y` + motion, `dd cc yy` | operators |
 | `iw aw i" a( ip` | text objects, as in `ciw` |
 | `x X D C Y p P` | edit |
+| `r s S` | replace a rune, substitute rune or line |
+| `>> <<`, `>` + motion | indent |
+| `~`, `gU gu g~` + motion | case |
+| `gv` | reselect the last visual range |
 | `J` | join lines |
 | `v V ctrl+v` | visual, line, block |
 | `> < ~ u U` | indent and case, in visual |
@@ -65,8 +72,9 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 Counts work: `3j`, `d2w`, `2dd`.
 
-Not in yet: `.` repeat, named registers, macros, marks, `/` search, and
-glamour rendering in normal mode.
+Not in yet: `.` repeat, `/` search with `n`/`N`, named registers, marks,
+macros, the jumplist, and glamour rendering in normal mode. Of those, `.`
+and `/` are the two you will miss first.
 
 ## Looks
 
@@ -77,7 +85,10 @@ that is always reserved so text never shifts.
 
 Everything is drawn in ANSI base colors, so the note takes its palette from
 your terminal theme rather than fighting it. The caret is the real terminal
-cursor: your cursor color, a block in normal and a bar in insert.
+cursor: your cursor color, a block in normal and a bar in insert. The one
+exception is the visual selection, which needs a background a single step off
+your own; zen-notes asks the terminal whether it is light or dark and picks
+to suit, assuming dark until the answer arrives.
 
 ## Development
 

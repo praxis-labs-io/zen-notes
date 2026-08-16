@@ -135,12 +135,16 @@ type Editor struct {
 	undo []snapshot
 	redo []snapshot
 
-	desiredCol int
-	top        int
-	height     int
-	dirty      bool
-	quit       bool
-	saveWanted bool
+	desiredCol     int
+	top            int
+	rows           []vrow
+	cursorRow      int
+	lastVisual     [2]Pos
+	height         int
+	dirty          bool
+	darkBackground bool
+	quit           bool
+	saveWanted     bool
 }
 
 const undoDepth = 200
@@ -148,9 +152,12 @@ const undoDepth = 200
 // New opens text in normal mode with the cursor at the start.
 func New(text string) *Editor {
 	return &Editor{
-		buf:    NewBuffer(text),
-		mode:   ModeNormal,
-		height: 20,
+		buf:  NewBuffer(text),
+		mode: ModeNormal,
+		// Assume dark until the terminal answers. A light selection on a dark
+		// background is the louder mistake of the two.
+		darkBackground: true,
+		height:         20,
 	}
 }
 
@@ -457,6 +464,7 @@ func (e *Editor) namedNormalKey(name string) {
 	case "esc":
 		e.pend = pending{}
 		if e.mode.Visual() {
+			e.rememberVisual()
 			e.mode = ModeNormal
 		}
 	case "c-d":
@@ -516,9 +524,22 @@ func (e *Editor) activeCount() int {
 	return e.pend.count2
 }
 
-// operator handles d, c and y, including the doubled dd, cc and yy forms.
+// operator handles the keys that take a motion, including the doubled forms
+// like dd and >> that act on whole lines.
 func (e *Editor) operator(r rune) bool {
-	if r != 'd' && r != 'c' && r != 'y' {
+	// gUU, guu and g~~ act on the whole line, like dd does for d.
+	if op, ok := caseOp(r); ok && e.pend.op == op {
+		last := min(e.cursor.Line+e.pend.count()-1, e.buf.LineCount()-1)
+		e.applyOperator(op, motion{target: Pos{last, 0}, kind: linewise})
+		e.pend = pending{}
+		return true
+	}
+	if r == '>' {
+		r = opIndent
+	} else if r == '<' {
+		r = opDedent
+	}
+	if r != 'd' && r != 'c' && r != 'y' && r != opIndent && r != opDedent {
 		return false
 	}
 	if e.mode.Visual() {
@@ -586,7 +607,15 @@ func (e *Editor) resolveMotion(r rune) (motion, bool) {
 			line = min(e.pend.count1-1, line)
 		}
 		return motion{Pos{line, 0}, linewise}, true
-	case 'g', 'f', 'F', 't', 'T':
+	case 'H', 'M', 'L':
+		return e.screenMotion(r, n)
+	case '%':
+		if target, ok := matchBracket(e.buf, cur); ok {
+			return motion{target, charInclusive}, true
+		}
+		e.pend = pending{}
+		return motion{}, false
+	case 'g', 'f', 'F', 't', 'T', 'r', 'z':
 		e.pend.await = r
 		return motion{}, false
 	case 'i', 'a':
@@ -650,20 +679,39 @@ func (e *Editor) resolveAwait(r rune) {
 	}
 
 	if await == 'g' {
-		if r != 'g' {
+		switch r {
+		case 'g':
+			line := 0
+			if e.pend.count1 > 0 {
+				line = min(e.pend.count1-1, e.buf.LineCount()-1)
+			}
+			e.applyMotion(motion{Pos{line, 0}, linewise})
+		case 'U', 'u', '~':
+			// gU, gu and g~ are operators, so they wait for a motion next.
+			e.pend.op, _ = caseOp(r)
+		case 'v':
+			e.reselect()
 			e.pend = pending{}
-			return
+		default:
+			e.pend = pending{}
 		}
-		line := 0
-		if e.pend.count1 > 0 {
-			line = min(e.pend.count1-1, e.buf.LineCount()-1)
-		}
-		e.applyMotion(motion{Pos{line, 0}, linewise})
 		return
 	}
 
 	if await == 'i' || await == 'a' {
 		e.applyTextObject(await == 'a', r)
+		return
+	}
+
+	if await == 'r' {
+		e.replaceRunes(r, e.pend.count())
+		e.pend = pending{}
+		return
+	}
+
+	if await == 'z' {
+		e.scrollTop(r)
+		e.pend = pending{}
 		return
 	}
 
@@ -779,6 +827,22 @@ func (e *Editor) forwardOne(p Pos) Pos {
 }
 
 func (e *Editor) operateLines(op rune, from, to int) {
+	switch {
+	case op == opIndent:
+		e.indentLines(from, to, 1)
+		return
+	case op == opDedent:
+		e.indentLines(from, to, -1)
+		return
+	case isCaseOp(op):
+		e.snapshot()
+		e.mapRange(Pos{from, 0}, Pos{to, max(e.buf.LineLen(to)-1, 0)}, caseFunc(op))
+		e.mode = ModeNormal
+		e.cursor = Pos{from, e.cursor.Col}
+		e.clampCursor()
+		return
+	}
+
 	var lines []string
 	for i := from; i <= to; i++ {
 		lines = append(lines, e.buf.Line(i))
@@ -804,6 +868,26 @@ func (e *Editor) operateLines(op rune, from, to int) {
 }
 
 func (e *Editor) operateChars(op rune, from, to Pos) {
+	if isCaseOp(op) {
+		e.snapshot()
+		last := to
+		if last.Col > 0 {
+			last.Col--
+		}
+		e.mapRange(from, last, caseFunc(op))
+		e.mode = ModeNormal
+		e.cursor = from
+		e.clampCursor()
+		return
+	}
+	if op == opIndent || op == opDedent {
+		dir := 1
+		if op == opDedent {
+			dir = -1
+		}
+		e.indentLines(from.Line, to.Line, dir)
+		return
+	}
 	if op == 'y' {
 		e.reg = register{text: e.textBetween(from, to)}
 		e.cursor = from
@@ -841,6 +925,7 @@ func (e *Editor) textBetween(from, to Pos) string {
 
 // applyVisual runs an operator over the current selection.
 func (e *Editor) applyVisual(op rune) {
+	e.rememberVisual()
 	if e.mode == ModeVisualBlock {
 		e.pend = pending{}
 		e.applyBlock(op)
@@ -904,6 +989,13 @@ func (e *Editor) command(r rune) {
 		e.put(true)
 	case 'P':
 		e.put(false)
+	case 's':
+		end := Pos{e.cursor.Line, min(e.cursor.Col+n, e.buf.LineLen(e.cursor.Line))}
+		e.operateChars('c', e.cursor, end)
+	case 'S':
+		e.operateLines('c', e.cursor.Line, min(e.cursor.Line+n-1, e.buf.LineCount()-1))
+	case '~':
+		e.toggleAt(n)
 	case 'u':
 		e.restore(&e.undo, &e.redo)
 	case 'J':

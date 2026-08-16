@@ -8,6 +8,7 @@ const indentUnit = "  "
 // reporting whether it took the key.
 func (e *Editor) visualCommand(r rune) bool {
 	from, to, _ := e.Selection()
+	e.rememberVisual()
 
 	switch r {
 	case 'o':

@@ -22,20 +22,34 @@ var classStyles = map[tokenClass]lipgloss.Style{
 	tokLink:      lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("4")),
 }
 
-// A muted background keeps the syntax colors readable under a selection,
-// which reverse video does not.
-var selectionStyle = lipgloss.NewStyle().Background(lipgloss.Color("8"))
+// Selection is a background one step off the terminal's own, dim enough that
+// the syntax colors and the terminal cursor both stay legible on top of it.
+var (
+	darkSelection  = lipgloss.NewStyle().Background(lipgloss.Color("237"))
+	lightSelection = lipgloss.NewStyle().Background(lipgloss.Color("253"))
+)
 
 var (
 	numberStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
-// GutterWidth is the number column plus padding. Reserved at all times, so
-// nothing shifts when the line count crosses a power of ten.
+// SetDarkBackground tunes the selection to the terminal's background, which
+// the app learns by asking the terminal at startup.
+func (e *Editor) SetDarkBackground(dark bool) { e.darkBackground = dark }
+
+func (e *Editor) selectionStyle() lipgloss.Style {
+	if e.darkBackground {
+		return darkSelection
+	}
+	return lightSelection
+}
+
+// GutterWidth is the widest line number plus the space before the text.
+// Reserved at all times, so nothing shifts as the line count grows.
 func GutterWidth(lineCount int) int {
 	digits := len(strconv.Itoa(lineCount))
-	return max(digits, 2) + 2
+	return max(digits, 2) + 1
 }
 
 // gutter renders the number cell for one screen row. The cursor's line shows
@@ -88,6 +102,7 @@ func (e *Editor) Render(width, height int) Rendered {
 
 	classes := classifyBuffer(e.buf)
 	rows, cursorRow, cursorCol := e.layout(textWidth)
+	e.rows, e.cursorRow = rows, cursorRow
 	e.top = scrollTo(e.top, cursorRow, height)
 
 	var out []string
@@ -147,7 +162,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
 		}
 		style := classStyles[lineClasses[i]]
 		if e.selected(Pos{row.line, i}, selFrom, selTo, selLines) {
-			style = selectionStyle
+			style = e.selectionStyle()
 		}
 		sb.WriteString(style.Render(string(runes[i])))
 		col += w

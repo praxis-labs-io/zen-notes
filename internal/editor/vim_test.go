@@ -672,6 +672,218 @@ func TestEscapeClearsAPendingOperator(t *testing.T) {
 	}
 }
 
+func TestScreenPositionMotions(t *testing.T) {
+	// 40 lines in a 10 row window, scrolled so lines 10..19 are showing.
+	newScrolled := func(t *testing.T) *Editor {
+		t.Helper()
+		e := New(strings.TrimSuffix(strings.Repeat("x\n", 40), "\n"))
+		e.SetHeight(10)
+		e.Render(20, 10)
+		feed(t, e, "15G")
+		e.Render(20, 10)
+		return e
+	}
+
+	tests := []struct {
+		name string
+		keys string
+		want int
+	}{
+		{"H goes to the top of the window", "H", 5},
+		{"M goes to the middle", "M", 9},
+		{"L goes to the bottom", "L", 14},
+		{"counted H goes down from the top", "3H", 7},
+		{"counted L goes up from the bottom", "3L", 12},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newScrolled(t)
+			feed(t, e, tt.keys)
+			if got := e.Cursor().Line; got != tt.want {
+				t.Errorf("line = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScreenPositionMotionsTakeOperators(t *testing.T) {
+	e := New("a\nb\nc\nd\ne")
+	e.SetHeight(5)
+	e.Render(20, 5)
+	feed(t, e, "dL")
+	if e.Text() != "" {
+		t.Fatalf("Text = %q, want dL to delete to the last visible line", e.Text())
+	}
+}
+
+func TestScrollPositioning(t *testing.T) {
+	tests := []struct {
+		name    string
+		keys    string
+		wantTop int
+	}{
+		{"zt puts the line at the top", "zt", 20},
+		{"zz centers the line", "zz", 16},
+		{"zb puts the line at the bottom", "zb", 11},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(strings.TrimSuffix(strings.Repeat("x\n", 40), "\n"))
+			e.SetHeight(10)
+			feed(t, e, "21G")
+			e.Render(20, 10)
+			feed(t, e, tt.keys)
+			e.Render(20, 10)
+			if got := e.Top(); got != tt.wantTop {
+				t.Errorf("top = %d, want %d", got, tt.wantTop)
+			}
+		})
+	}
+}
+
+func TestScrollPositioningKeepsTheCursorLine(t *testing.T) {
+	e := New(strings.TrimSuffix(strings.Repeat("x\n", 40), "\n"))
+	e.SetHeight(10)
+	feed(t, e, "21G")
+	e.Render(20, 10)
+	feed(t, e, "zz")
+	if e.Cursor().Line != 20 {
+		t.Fatalf("cursor line = %d, want 20", e.Cursor().Line)
+	}
+}
+
+func TestReplaceChar(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"r replaces one rune", "abc", "rz", "zbc"},
+		{"r keeps the cursor put", "abc", "lrz", "azc"},
+		{"counted r replaces a run", "abcd", "3rz", "zzzd"},
+		{"r past the line end does nothing", "ab", "$lrz", "az"},
+		{"r escape cancels", "abc", "r<esc>", "abc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSubstitute(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"s replaces a rune and inserts", "abc", "sX<esc>", "Xbc"},
+		{"counted s", "abcd", "2sX<esc>", "Xcd"},
+		{"S clears the line", "abc\ndef", "SX<esc>", "X\ndef"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalModeIndent(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{">> indents the line", "a\nb", ">>", "  a\nb"},
+		{"<< unindents", "    a", "<lt><lt>", "  a"},
+		{">j indents two lines", "a\nb\nc", ">j", "  a\n  b\nc"},
+		{"counted >>", "a\nb\nc", "2>>", "  a\n  b\nc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToggleCaseInNormalMode(t *testing.T) {
+	e := run(t, "abc", "~~")
+	if e.Text() != "ABc" {
+		t.Fatalf("Text = %q, want ABc", e.Text())
+	}
+	if e.Cursor().Col != 2 {
+		t.Fatalf("cursor col = %d, want 2. ~ advances", e.Cursor().Col)
+	}
+}
+
+func TestMatchingBracket(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want Pos
+	}{
+		{"forward to the close", "f(a, b)", "l%", Pos{0, 6}},
+		{"back to the open", "f(a, b)", "$%", Pos{0, 1}},
+		{"finds the pair ahead on the line", "if x {}", "%", Pos{0, 6}},
+		{"an unmatched bracket does not move", "if x {", "%", Pos{0, 0}},
+		{"nested", "f(g(x))", "l%", Pos{0, 6}},
+		{"across lines", "f(\n  a\n)", "l%", Pos{2, 0}},
+		{"no pair leaves the cursor put", "abc", "%", Pos{0, 0}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Cursor(); got != tt.want {
+				t.Errorf("Cursor = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchingBracketWithAnOperator(t *testing.T) {
+	e := run(t, "f(a, b) tail", "ld%")
+	if e.Text() != "f tail" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "f tail")
+	}
+}
+
+func TestReselectLastVisual(t *testing.T) {
+	e := run(t, "abcdef", "vll<esc>gvd")
+	if e.Text() != "def" {
+		t.Fatalf("Text = %q, want def", e.Text())
+	}
+}
+
+func TestCaseOperators(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"gUiw uppercases a word", "foo bar", "gUiw", "FOO bar"},
+		{"guiw lowercases", "FOO bar", "guiw", "foo bar"},
+		{"g~iw toggles", "fOo bar", "g~iw", "FoO bar"},
+		{"gUU on the line", "foo bar", "gUU", "FOO BAR"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHalfPageScroll(t *testing.T) {
 	e := New(strings.Repeat("x\n", 40))
 	e.SetHeight(10)
