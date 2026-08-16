@@ -5,37 +5,41 @@ import "strings"
 // search is the live pattern. Matches are plain substrings rather than regular
 // expressions, which is what reads naturally when searching prose.
 type search struct {
-	pattern string
-	matches []Pos
+	pattern  string
+	matches  []Pos
+	previous string
+	origin   Pos
 }
 
 // SearchPattern is the pattern currently highlighted, empty when none is.
 func (e *Editor) SearchPattern() string { return e.search.pattern }
 
-// startSearch opens the / line.
+// startSearch opens the / line, remembering where to put the cursor back if
+// the search is abandoned.
 func (e *Editor) startSearch() {
 	e.mode = ModeSearch
 	e.cmdline = nil
+	e.search.origin = e.cursor
 }
 
-// searchKey handles typing in the / line.
+// searchKey handles typing in the / line. Every keystroke re-runs the search,
+// so the cursor and the highlight follow along as the pattern is built.
 func (e *Editor) searchKey(k Key) {
 	switch k.Name {
 	case "esc":
 		e.mode = ModeNormal
 		e.cmdline = nil
+		e.cursor = e.buf.Clamp(e.search.origin)
 		e.clearSearch()
 		return
 	case "enter", "cr":
-		pattern := string(e.cmdline)
-		e.mode = ModeNormal
-		e.cmdline = nil
-		e.runSearch(pattern)
+		e.commitSearch(string(e.cmdline))
 		return
 	case "backspace", "bs":
 		if len(e.cmdline) > 0 {
 			e.cmdline = e.cmdline[:len(e.cmdline)-1]
 		}
+		e.preview()
 		return
 	case "":
 	default:
@@ -43,30 +47,55 @@ func (e *Editor) searchKey(k Key) {
 	}
 	if k.R != 0 {
 		e.cmdline = append(e.cmdline, k.R)
+		e.preview()
 	}
 }
 
-// runSearch accepts a pattern and jumps to the first match after the cursor.
-// An empty pattern reuses the last one, as in vim.
-func (e *Editor) runSearch(pattern string) {
+// preview runs the half-typed pattern without reporting anything, since a
+// message on every keystroke would be noise.
+func (e *Editor) preview() {
+	pattern := string(e.cmdline)
 	if pattern == "" {
-		pattern = e.search.pattern
-	}
-	if pattern == "" {
+		e.search.pattern, e.search.matches = "", nil
+		e.cursor = e.buf.Clamp(e.search.origin)
 		return
 	}
 
 	e.search.pattern = pattern
 	e.search.matches = e.findMatches(pattern)
 	if len(e.search.matches) == 0 {
+		e.cursor = e.buf.Clamp(e.search.origin)
+		return
+	}
+	e.jumpFrom(e.search.origin, false, true)
+}
+
+// commitSearch accepts the pattern. An empty one reuses the last, as in vim.
+func (e *Editor) commitSearch(pattern string) {
+	e.mode = ModeNormal
+	e.cmdline = nil
+
+	if pattern == "" {
+		pattern = e.search.previous
+	}
+	if pattern == "" {
+		e.clearSearch()
+		return
+	}
+
+	e.search.pattern = pattern
+	e.search.previous = pattern
+	e.search.matches = e.findMatches(pattern)
+	if len(e.search.matches) == 0 {
+		e.cursor = e.buf.Clamp(e.search.origin)
 		e.message = "not found: " + pattern
 		return
 	}
-	e.jumpToMatch(false)
+	e.jumpFrom(e.search.origin, false, false)
 }
 
 func (e *Editor) clearSearch() {
-	e.search = search{}
+	e.search.pattern, e.search.matches = "", nil
 }
 
 // findMatches lists the start of every match, top to bottom. The search is
@@ -96,9 +125,14 @@ func (e *Editor) findMatches(pattern string) []Pos {
 	return out
 }
 
-// jumpToMatch moves to the match after the cursor, or before it when going
-// backward, wrapping around the buffer and saying so when it does.
+// jumpToMatch is n and N: step to the match either side of the cursor.
 func (e *Editor) jumpToMatch(backward bool) {
+	e.jumpFrom(e.cursor, backward, false)
+}
+
+// jumpFrom moves to the match either side of from, wrapping around the buffer
+// and saying so unless asked to stay quiet.
+func (e *Editor) jumpFrom(from Pos, backward, quiet bool) {
 	matches := e.search.matches
 	if len(matches) == 0 {
 		return
@@ -106,29 +140,29 @@ func (e *Editor) jumpToMatch(backward bool) {
 
 	if backward {
 		for i := len(matches) - 1; i >= 0; i-- {
-			if matches[i].Before(e.cursor) {
-				e.moveToMatch(matches[i], false)
+			if matches[i].Before(from) {
+				e.moveToMatch(matches[i], false, quiet)
 				return
 			}
 		}
-		e.moveToMatch(matches[len(matches)-1], true)
+		e.moveToMatch(matches[len(matches)-1], true, quiet)
 		return
 	}
 
 	for _, m := range matches {
-		if e.cursor.Before(m) {
-			e.moveToMatch(m, false)
+		if from.Before(m) {
+			e.moveToMatch(m, false, quiet)
 			return
 		}
 	}
-	e.moveToMatch(matches[0], true)
+	e.moveToMatch(matches[0], true, quiet)
 }
 
-func (e *Editor) moveToMatch(p Pos, wrapped bool) {
+func (e *Editor) moveToMatch(p Pos, wrapped, quiet bool) {
 	e.cursor = e.buf.Clamp(p)
 	e.clampCursor()
 	e.desiredCol = e.cursor.Col
-	if wrapped {
+	if wrapped && !quiet {
 		e.message = "wrapped"
 	}
 }

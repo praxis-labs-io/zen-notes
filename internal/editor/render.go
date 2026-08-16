@@ -31,6 +31,8 @@ var (
 	lightSelection = lipgloss.NewStyle().Background(lipgloss.Color("253"))
 	darkFlash      = lipgloss.NewStyle().Background(lipgloss.Color("242"))
 	lightFlash     = lipgloss.NewStyle().Background(lipgloss.Color("248"))
+	darkMatch      = lipgloss.NewStyle().Background(lipgloss.Color("240"))
+	lightMatch     = lipgloss.NewStyle().Background(lipgloss.Color("250"))
 )
 
 // How far the selection and the yank flash shift off the background. A step
@@ -41,6 +43,8 @@ const (
 	lightSelectionStep = 0.07
 	darkFlashStep      = 0.30
 	lightFlashStep     = 0.16
+	darkMatchStep      = 0.22
+	lightMatchStep     = 0.11
 )
 
 var (
@@ -52,9 +56,9 @@ var (
 // known, not the colour itself.
 func (e *Editor) SetDarkBackground(dark bool) {
 	e.darkBackground = dark
-	e.selection, e.flashStyle = darkSelection, darkFlash
+	e.selection, e.flashStyle, e.matchStyle = darkSelection, darkFlash, darkMatch
 	if !dark {
-		e.selection, e.flashStyle = lightSelection, lightFlash
+		e.selection, e.flashStyle, e.matchStyle = lightSelection, lightFlash, lightMatch
 	}
 }
 
@@ -69,12 +73,13 @@ func (e *Editor) SetBackground(c color.Color) {
 	h, s, l := col.Hsl()
 	e.darkBackground = l < 0.5
 
-	selStep, flashStep := darkSelectionStep, darkFlashStep
+	selStep, flashStep, matchStep := darkSelectionStep, darkFlashStep, darkMatchStep
 	if !e.darkBackground {
-		selStep, flashStep = -lightSelectionStep, -lightFlashStep
+		selStep, flashStep, matchStep = -lightSelectionStep, -lightFlashStep, -lightMatchStep
 	}
 	e.selection = shifted(h, s, l, selStep)
 	e.flashStyle = shifted(h, s, l, flashStep)
+	e.matchStyle = shifted(h, s, l, matchStep)
 }
 
 // shifted builds a background the given lightness step away from the theme's.
@@ -226,7 +231,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
 		case e.selected(Pos{row.line, i}, selFrom, selTo, selLines):
 			style = e.selectionStyle()
 		case e.matchCovers(Pos{row.line, i}):
-			style = e.selectionStyle().Bold(true)
+			style = e.matchStyle
 		}
 		sb.WriteString(style.Render(string(runes[i])))
 		col += w

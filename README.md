@@ -73,8 +73,10 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 Counts work: `3j`, `d2w`, `2dd`.
 
-Search is a plain substring, not a regular expression, and it ignores case
-unless the pattern carries a capital. Matches stay lit until `esc`. There is
+Search is incremental: the cursor and the highlight follow along as you type,
+and `esc` puts the cursor back where you started. It matches a plain substring
+rather than a regular expression, and ignores case unless the pattern carries
+a capital. Matches stay lit until `esc`. There is
 no `?` for a backward search, because `?` opens the binding list; `N` walks
 backward instead.
 

@@ -172,3 +172,72 @@ func TestSearchModeName(t *testing.T) {
 		t.Fatalf("Mode = %v, want search", e.Mode())
 	}
 }
+
+func TestSearchIsIncremental(t *testing.T) {
+	e := New("alpha\nbeta\ngamma")
+	feed(t, e, "/bet")
+
+	if e.Cursor() != (Pos{1, 0}) {
+		t.Fatalf("Cursor = %v, want it to follow along as you type", e.Cursor())
+	}
+	if !e.matchCovers(Pos{1, 0}) {
+		t.Fatal("no live highlight while typing")
+	}
+}
+
+func TestIncrementalSearchFollowsEachKeystroke(t *testing.T) {
+	e := New("aaa\nbbb\nccc")
+	feed(t, e, "/c")
+	if e.Cursor().Line != 2 {
+		t.Fatalf("line = %d, want 2", e.Cursor().Line)
+	}
+	feed(t, e, "<bs>b")
+	if e.Cursor().Line != 1 {
+		t.Fatalf("line = %d, want 1 after retyping", e.Cursor().Line)
+	}
+}
+
+func TestBackspacingToEmptyReturnsToTheStart(t *testing.T) {
+	e := New("alpha\nbeta")
+	feed(t, e, "/beta")
+	if e.Cursor().Line != 1 {
+		t.Fatalf("line = %d, want 1", e.Cursor().Line)
+	}
+	feed(t, e, "<bs><bs><bs><bs>")
+	if e.Cursor() != (Pos{0, 0}) {
+		t.Fatalf("Cursor = %v, want back where the search started", e.Cursor())
+	}
+}
+
+func TestCancellingPutsTheCursorBack(t *testing.T) {
+	e := run(t, "alpha\nbeta\ngamma", "jj")
+	start := e.Cursor()
+	feed(t, e, "/alpha")
+	if e.Cursor() == start {
+		t.Fatal("the preview never moved")
+	}
+
+	feed(t, e, "<esc>")
+	if e.Cursor() != start {
+		t.Fatalf("Cursor = %v, want %v restored", e.Cursor(), start)
+	}
+}
+
+func TestIncrementalSearchDoesNotFlashWrapped(t *testing.T) {
+	e := New("beta\nalpha")
+	feed(t, e, "G/beta")
+	if e.Message() != "" {
+		t.Fatalf("Message = %q, want the preview to stay quiet", e.Message())
+	}
+	feed(t, e, "<cr>")
+	if !strings.Contains(e.Message(), "wrapped") {
+		t.Fatalf("Message = %q, want wrapping reported on commit", e.Message())
+	}
+}
+
+func TestMatchesAreNotBold(t *testing.T) {
+	e := run(t, "beta", "/beta<cr>")
+	if strings.Contains(e.Render(20, 3).Content, "\x1b[1m") {
+		t.Fatal("matches are bold; the heavier glyph misaligns with its cell")
+	}
+}

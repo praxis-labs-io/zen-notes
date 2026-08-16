@@ -162,6 +162,7 @@ type Editor struct {
 	darkBackground bool
 	selection      lipgloss.Style
 	flashStyle     lipgloss.Style
+	matchStyle     lipgloss.Style
 	flash          flashRange
 	quit           bool
 	saveWanted     bool
@@ -179,6 +180,7 @@ func New(text string) *Editor {
 		darkBackground: true,
 		selection:      darkSelection,
 		flashStyle:     darkFlash,
+		matchStyle:     darkMatch,
 		height:         20,
 	}
 }
