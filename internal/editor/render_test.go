@@ -3,6 +3,8 @@ package editor
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // classLetters gives each token class a letter so a whole line's
@@ -187,8 +189,9 @@ func TestRenderReportsTheCursorPosition(t *testing.T) {
 	feed(t, e, "jll")
 
 	got := e.Render(20, 10)
-	if got.CursorRow != 1 || got.CursorCol != 2 {
-		t.Fatalf("cursor = %d, %d; want 1, 2", got.CursorRow, got.CursorCol)
+	wantCol := 2 + GutterWidth(2)
+	if got.CursorRow != 1 || got.CursorCol != wantCol {
+		t.Fatalf("cursor = %d, %d; want 1, %d", got.CursorRow, got.CursorCol, wantCol)
 	}
 }
 
@@ -196,9 +199,10 @@ func TestRenderCursorFollowsAWrappedLine(t *testing.T) {
 	e := New("hello world")
 	feed(t, e, "$")
 
-	got := e.Render(5, 10)
-	if got.CursorRow != 1 || got.CursorCol != 4 {
-		t.Fatalf("cursor = %d, %d; want 1, 4", got.CursorRow, got.CursorCol)
+	got := e.Render(5+GutterWidth(1), 10)
+	wantCol := 4 + GutterWidth(1)
+	if got.CursorRow != 1 || got.CursorCol != wantCol {
+		t.Fatalf("cursor = %d, %d; want 1, %d", got.CursorRow, got.CursorCol, wantCol)
 	}
 }
 
@@ -217,8 +221,9 @@ func TestRenderCursorCountsDisplayWidth(t *testing.T) {
 	feed(t, e, "ll")
 
 	got := e.Render(20, 10)
-	if got.CursorCol != 4 {
-		t.Fatalf("cursor col = %d, want 4", got.CursorCol)
+	wantCol := 4 + GutterWidth(1)
+	if got.CursorCol != wantCol {
+		t.Fatalf("cursor col = %d, want %d", got.CursorCol, wantCol)
 	}
 }
 
@@ -228,8 +233,9 @@ func TestRenderCursorPastTheLastRune(t *testing.T) {
 	feed(t, e, "A")
 
 	got := e.Render(20, 10)
-	if got.CursorCol != 2 {
-		t.Fatalf("cursor col = %d, want 2", got.CursorCol)
+	wantCol := 2 + GutterWidth(1)
+	if got.CursorCol != wantCol {
+		t.Fatalf("cursor col = %d, want %d", got.CursorCol, wantCol)
 	}
 }
 
@@ -239,6 +245,88 @@ func TestRenderNoLongerPaintsTheCursor(t *testing.T) {
 
 	if !strings.Contains(got.Content, "hello") {
 		t.Fatal("the cursor is still painted into the content, splitting the text")
+	}
+}
+
+func TestGutterShowsHybridLineNumbers(t *testing.T) {
+	e := New("one\ntwo\nthree\nfour")
+	feed(t, e, "jj")
+
+	rows := strings.Split(ansi.Strip(e.Render(30, 10).Content), "\n")
+	want := []string{"  2 one", "  1 two", "3   three", "  1 four"}
+	for i, w := range want {
+		if !strings.HasPrefix(rows[i], w) {
+			t.Errorf("row %d = %q, want prefix %q", i, rows[i], w)
+		}
+	}
+}
+
+func TestGutterWidthGrowsWithTheLineCount(t *testing.T) {
+	e := New(strings.Repeat("x\n", 150))
+	narrow := New("x\ny")
+
+	wide := GutterWidth(e.buf.LineCount())
+	if wide <= GutterWidth(narrow.buf.LineCount()) {
+		t.Fatalf("gutter did not grow: %d vs %d", wide, GutterWidth(narrow.buf.LineCount()))
+	}
+}
+
+func TestGutterIsBlankOnWrappedRows(t *testing.T) {
+	e := New("hello world this wraps")
+
+	rows := strings.Split(ansi.Strip(e.Render(14, 10).Content), "\n")
+	if !strings.HasPrefix(rows[0], "1  ") {
+		t.Fatalf("row 0 = %q, want a line number", rows[0])
+	}
+	if strings.TrimSpace(strings.SplitN(rows[1], " ", 2)[0]) != "" {
+		t.Fatalf("row 1 = %q, want a blank gutter on the wrapped row", rows[1])
+	}
+}
+
+func TestGutterShiftsTheCursor(t *testing.T) {
+	e := New("abc")
+	got := e.Render(30, 10)
+	if got.CursorCol != GutterWidth(1) {
+		t.Fatalf("cursor col = %d, want the gutter width %d", got.CursorCol, GutterWidth(1))
+	}
+}
+
+func TestTextWrapsInsideTheGutter(t *testing.T) {
+	e := New("aaaa bbbb")
+	// Width 14 with a 4 wide gutter leaves 10 columns, so this fits one row.
+	rows := strings.Split(ansi.Strip(e.Render(14, 10).Content), "\n")
+	if !strings.Contains(rows[0], "aaaa bbbb") {
+		t.Fatalf("row 0 = %q, want the whole line", rows[0])
+	}
+}
+
+// A row must never exceed the width it was given. The wrap point keeps the
+// break space on the previous row, which is what used to push it over.
+func TestRenderNeverExceedsTheGivenWidth(t *testing.T) {
+	texts := []string{
+		"A longer line that will wrap around the edge of this narrow window nicely.",
+		"aaaa bbbb cccc dddd eeee ffff",
+		strings.Repeat("word ", 40),
+		"日本語 の テキスト が ここ に あります",
+	}
+	for _, text := range texts {
+		for _, width := range []int{12, 20, 33, 70} {
+			e := New(text)
+			for i, row := range strings.Split(e.Render(width, 12).Content, "\n") {
+				if got := ansi.StringWidth(row); got > width {
+					t.Errorf("width %d: row %d is %d wide: %q", width, i, got, ansi.Strip(row))
+				}
+			}
+		}
+	}
+}
+
+func TestRenderCursorStaysInsideTheWidth(t *testing.T) {
+	e := New("aaaa bbbb cccc")
+	feed(t, e, "$")
+	got := e.Render(14, 10)
+	if got.CursorCol >= 14 {
+		t.Fatalf("cursor col = %d, want inside a width of 14", got.CursorCol)
 	}
 }
 

@@ -10,6 +10,7 @@ const (
 	ModeInsert
 	ModeVisual
 	ModeVisualLine
+	ModeVisualBlock
 	ModeCommand
 )
 
@@ -21,11 +22,18 @@ func (m Mode) String() string {
 		return "VISUAL"
 	case ModeVisualLine:
 		return "V-LINE"
+	case ModeVisualBlock:
+		return "V-BLOCK"
 	case ModeCommand:
 		return "COMMAND"
 	default:
 		return "NORMAL"
 	}
+}
+
+// Visual reports whether the mode is one of the three visual modes.
+func (m Mode) Visual() bool {
+	return m == ModeVisual || m == ModeVisualLine || m == ModeVisualBlock
 }
 
 // Key is one keystroke: either a literal rune or a named key like esc or c-d.
@@ -59,6 +67,24 @@ type motion struct {
 type register struct {
 	text     string
 	linewise bool
+	block    bool
+}
+
+// find remembers the last f, t, F or T so ; and , can walk it.
+type find struct {
+	kind   rune
+	target rune
+}
+
+// blockPending tracks a visual-block I or A, so leaving insert mode can
+// replicate what was typed down the other lines of the block.
+type blockPending struct {
+	active     bool
+	firstLine  int
+	lastLine   int
+	col        int
+	appendEnd  bool
+	insertedAt Pos
 }
 
 type snapshot struct {
@@ -103,6 +129,8 @@ type Editor struct {
 	visualStart Pos
 	cmdline     []rune
 	message     string
+	lastFind    find
+	blockInsert blockPending
 
 	undo []snapshot
 	redo []snapshot
@@ -255,6 +283,7 @@ func (e *Editor) restore(from *[]snapshot, to *[]snapshot) {
 func (e *Editor) insertKey(k Key) {
 	switch k.Name {
 	case "esc":
+		e.finishBlockInsert()
 		e.mode = ModeNormal
 		if e.cursor.Col > 0 {
 			e.cursor.Col--
@@ -398,6 +427,9 @@ func (e *Editor) normalKey(k Key) {
 	if e.operator(r) {
 		return
 	}
+	if e.mode.Visual() && e.visualCommand(r) {
+		return
+	}
 	if m, ok := e.resolveMotion(r); ok {
 		e.applyMotion(m)
 		return
@@ -415,7 +447,7 @@ func (e *Editor) namedNormalKey(name string) {
 	switch name {
 	case "esc":
 		e.pend = pending{}
-		if e.mode == ModeVisual || e.mode == ModeVisualLine {
+		if e.mode.Visual() {
 			e.mode = ModeNormal
 		}
 	case "up":
@@ -430,6 +462,9 @@ func (e *Editor) namedNormalKey(name string) {
 		e.halfPage(-1)
 	case "c-r":
 		e.restore(&e.redo, &e.undo)
+	case "c-v":
+		e.startVisual(ModeVisualBlock)
+		e.pend = pending{}
 	}
 }
 
@@ -467,7 +502,7 @@ func (e *Editor) operator(r rune) bool {
 	if r != 'd' && r != 'c' && r != 'y' {
 		return false
 	}
-	if e.mode == ModeVisual || e.mode == ModeVisualLine {
+	if e.mode.Visual() {
 		e.applyVisual(r)
 		return true
 	}
@@ -535,8 +570,50 @@ func (e *Editor) resolveMotion(r rune) (motion, bool) {
 	case 'g', 'f', 'F', 't', 'T':
 		e.pend.await = r
 		return motion{}, false
+	case 'i', 'a':
+		// Only an operator or a visual selection can take a text object;
+		// otherwise these are the insert keys.
+		if e.pend.op != 0 || e.mode.Visual() {
+			e.pend.await = r
+			return motion{}, false
+		}
+	case ';':
+		e.repeatFind(false)
+		return motion{}, false
+	case ',':
+		e.repeatFind(true)
+		return motion{}, false
 	}
 	return motion{}, false
+}
+
+// applyTextObject resolves an iw/aw/i(/a" style object and hands the span to
+// the pending operator, or selects it when in a visual mode.
+func (e *Editor) applyTextObject(around bool, object rune) {
+	span, ok := resolveTextObject(e.buf, e.cursor, around, object)
+	if !ok {
+		e.pend = pending{}
+		return
+	}
+
+	if e.mode.Visual() {
+		e.visualStart = span.from
+		e.cursor = e.buf.Clamp(span.to)
+		e.pend = pending{}
+		return
+	}
+
+	op := e.pend.op
+	e.pend = pending{}
+	if op == 0 {
+		return
+	}
+	e.cursor = span.from
+	if span.linewise {
+		e.operateLines(op, span.from.Line, span.to.Line)
+		return
+	}
+	e.operateChars(op, span.from, e.forwardOne(span.to))
 }
 
 // resolveAwait handles the second key of gg and the target of f, t, F and T.
@@ -566,29 +643,79 @@ func (e *Editor) resolveAwait(r rune) {
 		return
 	}
 
-	n := e.pend.count()
+	if await == 'i' || await == 'a' {
+		e.applyTextObject(await == 'a', r)
+		return
+	}
+
+	e.lastFind = find{kind: await, target: r}
+	e.applyFind(await, r, e.pend.count())
+}
+
+// applyFind runs one of f, t, F or T and moves or operates with the result.
+func (e *Editor) applyFind(kind, target rune, n int) {
 	var col int
 	var ok bool
-	switch await {
+	switch kind {
 	case 'f':
-		col, ok = findForward(e.buf, e.cursor, r, false, n)
+		col, ok = findForward(e.buf, e.cursor, target, false, n)
 	case 't':
-		col, ok = findForward(e.buf, e.cursor, r, true, n)
+		col, ok = findForward(e.buf, e.cursor, target, true, n)
 	case 'F':
-		col, ok = findBack(e.buf, e.cursor, r, false, n)
+		col, ok = findBack(e.buf, e.cursor, target, false, n)
 	case 'T':
-		col, ok = findBack(e.buf, e.cursor, r, true, n)
+		col, ok = findBack(e.buf, e.cursor, target, true, n)
 	}
 	if !ok {
 		e.pend = pending{}
 		return
 	}
 
-	kind := charInclusive
-	if await == 'F' || await == 'T' {
-		kind = charExclusive
+	motionKind := charInclusive
+	if kind == 'F' || kind == 'T' {
+		motionKind = charExclusive
 	}
-	e.applyMotion(motion{Pos{e.cursor.Line, col}, kind})
+	e.applyMotion(motion{Pos{e.cursor.Line, col}, motionKind})
+}
+
+// repeatFind is ; and ,. A t or T repeat starts one rune further along, or it
+// would just find the character the cursor is already parked against.
+func (e *Editor) repeatFind(reverse bool) {
+	if e.lastFind.kind == 0 {
+		e.pend = pending{}
+		return
+	}
+	kind := e.lastFind.kind
+	if reverse {
+		kind = flipFind(kind)
+	}
+
+	n := e.pend.count()
+	saved := e.cursor
+	if kind == 't' {
+		e.cursor.Col++
+	} else if kind == 'T' {
+		e.cursor.Col--
+	}
+
+	op := e.pend.op
+	e.applyFind(kind, e.lastFind.target, n)
+	if e.cursor == e.buf.Clamp(saved) && op == 0 {
+		e.cursor = saved
+	}
+}
+
+func flipFind(kind rune) rune {
+	switch kind {
+	case 'f':
+		return 'F'
+	case 'F':
+		return 'f'
+	case 't':
+		return 'T'
+	default:
+		return 't'
+	}
 }
 
 // applyMotion either moves the caret or feeds a pending operator.
@@ -695,6 +822,11 @@ func (e *Editor) textBetween(from, to Pos) string {
 
 // applyVisual runs an operator over the current selection.
 func (e *Editor) applyVisual(op rune) {
+	if e.mode == ModeVisualBlock {
+		e.pend = pending{}
+		e.applyBlock(op)
+		return
+	}
 	from, to, lines := e.Selection()
 	e.mode = ModeNormal
 	e.pend = pending{}
@@ -755,6 +887,8 @@ func (e *Editor) command(r rune) {
 		e.put(false)
 	case 'u':
 		e.restore(&e.undo, &e.redo)
+	case 'J':
+		e.joinLines(e.cursor.Line, e.cursor.Line+max(n-1, 1))
 	case 'v':
 		e.startVisual(ModeVisual)
 	case 'V':
@@ -788,6 +922,23 @@ func (e *Editor) put(after bool) {
 		return
 	}
 	e.snapshot()
+
+	if e.reg.block {
+		col := e.cursor.Col
+		if after && e.buf.LineLen(e.cursor.Line) > 0 {
+			col++
+		}
+		for i, part := range strings.Split(e.reg.text, "\n") {
+			line := e.cursor.Line + i
+			if line >= e.buf.LineCount() {
+				break
+			}
+			e.buf.Insert(Pos{line, min(col, e.buf.LineLen(line))}, part)
+		}
+		e.cursor = e.buf.Clamp(Pos{e.cursor.Line, col})
+		e.clampCursor()
+		return
+	}
 
 	if e.reg.linewise {
 		at := e.cursor.Line

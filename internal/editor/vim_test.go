@@ -15,7 +15,12 @@ func feed(t *testing.T, e *Editor, keys string) {
 			if end < 0 {
 				t.Fatalf("unterminated key name in %q", keys)
 			}
-			e.Feed(Named(keys[1:end]))
+			// <lt> is a literal '<', as in vim, so '<' stays typable.
+			if keys[1:end] == "lt" {
+				e.Feed(Rune('<'))
+			} else {
+				e.Feed(Named(keys[1:end]))
+			}
 			keys = keys[end+1:]
 			continue
 		}
@@ -144,6 +149,103 @@ func TestBasicMotions(t *testing.T) {
 				t.Errorf("Cursor = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRepeatFind(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want Pos
+	}{
+		{"semicolon repeats f", "hello world", "fo;", Pos{0, 7}},
+		{"comma reverses f", "hello world", "fo;,", Pos{0, 4}},
+		{"semicolon repeats F", "hello world", "$Fo;", Pos{0, 4}},
+		{"comma reverses F", "hello world", "$Fo;,", Pos{0, 7}},
+		{"semicolon repeats t", "a.b.c.d", "t.;", Pos{0, 2}},
+		{"counted repeat", "a.b.c.d.e", "t.3;", Pos{0, 6}},
+		{"semicolon alone does nothing", "hello", ";", Pos{0, 0}},
+		{"repeat past the last match stays put", "hello world", "fo;;", Pos{0, 7}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Cursor(); got != tt.want {
+				t.Errorf("Cursor = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRepeatFindWithAnOperator(t *testing.T) {
+	e := run(t, "hello world", "fod;")
+	if e.Text() != "hellrld" {
+		t.Fatalf("Text = %q, want hellrld", e.Text())
+	}
+}
+
+func TestTextObjects(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"diw deletes the word", "foo bar baz", "wdiw", "foo  baz"},
+		{"daw takes the trailing space", "foo bar baz", "wdaw", "foo baz"},
+		{"ciw from mid word", "foo bar", "lldiw", " bar"},
+		{"diw on punctuation", "foo.bar", "lldiw", ".bar"},
+		{"diW takes the whole blob", "a foo.bar b", "wdiW", "a  b"},
+		{"di\" empties the quotes", `say "hello" now`, `f"di"`, `say "" now`},
+		{"da\" takes the quotes too", `say "hello" now`, `f"da"`, "say  now"},
+		{"di( empties the parens", "f(a, b)", "lldi(", "f()"},
+		{"da( takes the parens", "f(a, b)", "llda(", "f"},
+		{"di{ works from inside", "x{a}y", "lldi{", "x{}y"},
+		{"di[ works", "x[ab]y", "lldi[", "x[]y"},
+		{"cursor on the open paren", "f(a)", "ldi(", "f()"},
+		{"nested parens take the inner", "f(g(x))", "fxdi(", "f(g())"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTextObjectParagraph(t *testing.T) {
+	e := run(t, "a\nb\n\nc\nd", "dip")
+	if e.Text() != "\nc\nd" {
+		t.Fatalf("Text = %q, want \\nc\\nd", e.Text())
+	}
+}
+
+func TestChangeTextObjectEntersInsert(t *testing.T) {
+	e := run(t, "foo bar", "ciwzap<esc>")
+	if e.Text() != "zap bar" {
+		t.Fatalf("Text = %q, want zap bar", e.Text())
+	}
+}
+
+func TestVisualTextObject(t *testing.T) {
+	e := run(t, "foo bar baz", "wviwd")
+	if e.Text() != "foo  baz" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "foo  baz")
+	}
+}
+
+func TestYankTextObject(t *testing.T) {
+	e := run(t, "foo bar", "yiw$p")
+	if e.Text() != "foo barfoo" {
+		t.Fatalf("Text = %q, want foo barfoo", e.Text())
+	}
+}
+
+func TestUnknownTextObjectIsHarmless(t *testing.T) {
+	e := run(t, "foo bar", "diz")
+	if e.Text() != "foo bar" {
+		t.Fatalf("Text = %q, want unchanged", e.Text())
 	}
 }
 
@@ -280,6 +382,129 @@ func TestVisualMode(t *testing.T) {
 				t.Errorf("Text = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestVisualIndent(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"indent one line", "a\nb", "V>", "  a\nb"},
+		{"indent two lines", "a\nb", "Vj>", "  a\n  b"},
+		{"unindent", "    a\nb", "V<lt>", "  a\nb"},
+		{"unindent stops at zero", "a\nb", "V<lt>", "a\nb"},
+		{"unindent partial", " a\nb", "V<lt>", "a\nb"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestVisualCase(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"toggle case", "aBc", "vll~", "AbC"},
+		{"lowercase", "ABC", "vllu", "abc"},
+		{"uppercase", "abc", "vllU", "ABC"},
+		{"linewise uppercase", "abc\ndef", "VU", "ABC\ndef"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestVisualJoin(t *testing.T) {
+	e := run(t, "a\nb\nc", "VjJ")
+	if e.Text() != "a b\nc" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "a b\nc")
+	}
+}
+
+func TestNormalJoin(t *testing.T) {
+	e := run(t, "a\nb\nc", "J")
+	if e.Text() != "a b\nc" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "a b\nc")
+	}
+}
+
+func TestJoinTrimsLeadingWhitespace(t *testing.T) {
+	e := run(t, "a\n    b", "J")
+	if e.Text() != "a b" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "a b")
+	}
+}
+
+func TestVisualBlockDelete(t *testing.T) {
+	e := run(t, "abcd\nabcd\nabcd", "l<c-v>jjld")
+	if e.Text() != "ad\nad\nad" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "ad\nad\nad")
+	}
+}
+
+func TestVisualBlockOnShortLines(t *testing.T) {
+	e := run(t, "abcd\nx\nabcd", "l<c-v>jjld")
+	if e.Text() != "ad\nx\nad" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "ad\nx\nad")
+	}
+}
+
+func TestVisualBlockInsertReplicates(t *testing.T) {
+	e := run(t, "aa\nbb\ncc", "<c-v>jjI>><esc>")
+	if e.Text() != ">>aa\n>>bb\n>>cc" {
+		t.Fatalf("Text = %q, want %q", e.Text(), ">>aa\n>>bb\n>>cc")
+	}
+}
+
+func TestVisualBlockAppendReplicates(t *testing.T) {
+	e := run(t, "aa\nbb\ncc", "<c-v>jj$A!<esc>")
+	if e.Text() != "aa!\nbb!\ncc!" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "aa!\nbb!\ncc!")
+	}
+}
+
+func TestVisualBlockYankAndPut(t *testing.T) {
+	e := run(t, "ab\nab", "<c-v>jy$p")
+	if e.Text() != "aba\naba" {
+		t.Fatalf("Text = %q, want %q", e.Text(), "aba\naba")
+	}
+}
+
+func TestVisualBlockEscapeCancels(t *testing.T) {
+	e := run(t, "abcd\nabcd", "<c-v>jl<esc>d")
+	if e.Text() != "abcd\nabcd" {
+		t.Fatalf("Text = %q, want unchanged", e.Text())
+	}
+}
+
+func TestVisualBlockModeName(t *testing.T) {
+	e := run(t, "abcd", "<c-v>")
+	if e.Mode() != ModeVisualBlock {
+		t.Fatalf("Mode = %v, want visual block", e.Mode())
+	}
+	if e.Mode().String() != "V-BLOCK" {
+		t.Fatalf("Mode name = %q, want V-BLOCK", e.Mode().String())
+	}
+}
+
+func TestVisualSwapEnds(t *testing.T) {
+	e := run(t, "abcdef", "llvlo")
+	if e.Cursor() != (Pos{0, 2}) {
+		t.Fatalf("Cursor = %v, want {0 2}", e.Cursor())
 	}
 }
 

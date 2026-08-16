@@ -5,14 +5,11 @@ package app
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/drucial/zen-notes/internal/editor"
 	"github.com/drucial/zen-notes/internal/note"
-	"github.com/mattn/go-runewidth"
 )
 
 // saveInterval is how often a dirty buffer reaches disk. Short enough that a
@@ -55,6 +52,7 @@ type Model struct {
 	followToday bool
 	lastWritten string
 	status      string
+	help        bool
 
 	width, height int
 	now           func() note.Day
@@ -133,6 +131,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if m.help {
+		m.help = false
+		return nil
+	}
 	if m.ed.Mode() == editor.ModeNormal && m.browseKey(key) {
 		return nil
 	}
@@ -165,6 +167,8 @@ func (m *Model) browseKey(key editor.Key) bool {
 		m.step(m.store.Next, "no later note")
 	case '\\':
 		m.open(note.Today(), true)
+	case '?':
+		m.help = true
 	default:
 		return false
 	}
@@ -271,7 +275,7 @@ func (m *Model) quit() tea.Cmd {
 func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
 	if msg.Mod&tea.ModCtrl != 0 {
 		switch msg.Code {
-		case 'd', 'u', 'r':
+		case 'd', 'u', 'r', 'v':
 			return editor.Named(fmt.Sprintf("c-%c", msg.Code)), true
 		}
 		return editor.Key{}, false
@@ -304,60 +308,4 @@ func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
 		return editor.Rune([]rune(msg.Text)[0]), true
 	}
 	return editor.Key{}, false
-}
-
-// --- view ---
-
-var (
-	statusStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	modeStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("4"))
-	dirtyStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	messageStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
-)
-
-func (m *Model) textHeight() int { return max(m.height-1, 1) }
-
-func (m *Model) View() tea.View {
-	r := m.ed.Render(m.width, m.textHeight())
-	v := tea.NewView(r.Content + "\n" + m.statusBar())
-	v.AltScreen = true
-	v.Cursor = m.cursor(r)
-	return v
-}
-
-// cursor places the real terminal cursor. Color stays nil so the terminal's
-// own cursor color applies, and the shape says which mode you are in.
-func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
-	if cmd := m.ed.CommandLine(); cmd != "" {
-		c := tea.NewCursor(runewidth.StringWidth(cmd), m.textHeight())
-		c.Shape = tea.CursorBar
-		return c
-	}
-	c := tea.NewCursor(r.CursorCol, r.CursorRow)
-	c.Shape = tea.CursorBlock
-	if m.ed.Mode() == editor.ModeInsert {
-		c.Shape = tea.CursorBar
-	}
-	return c
-}
-
-func (m *Model) statusBar() string {
-	if cmd := m.ed.CommandLine(); cmd != "" {
-		return cmd
-	}
-
-	left := []string{
-		statusStyle.Render(m.day.String()),
-		modeStyle.Render(m.ed.Mode().String()),
-	}
-	if m.ed.Dirty() {
-		left = append(left, dirtyStyle.Render("●"))
-	}
-	if m.status != "" {
-		left = append(left, messageStyle.Render(m.status))
-	}
-	if keys := m.ed.PendingKeys(); keys != "" {
-		left = append(left, statusStyle.Render(keys))
-	}
-	return strings.Join(left, "  ")
 }

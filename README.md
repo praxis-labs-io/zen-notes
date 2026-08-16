@@ -35,7 +35,9 @@ away from today.
 
 ## Keys
 
-Modes: normal, insert, visual, visual-line, and a `:` line.
+Press `?` for the binding list without leaving the app.
+
+Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 | | |
 |---|---|
@@ -44,19 +46,37 @@ Modes: normal, insert, visual, visual-line, and a `:` line.
 | `0 ^ $` | line start, first non-blank, line end |
 | `gg G`, `{ }` | buffer ends, paragraphs |
 | `f F t T` | find on the line |
+| `; ,` | repeat that find, forward and back |
 | `ctrl+d ctrl+u` | half page |
 | `i a I A o O` | insert |
 | `d c y` + motion, `dd cc yy` | operators |
+| `iw aw i" a( ip` | text objects, as in `ciw` |
 | `x X D C Y p P` | edit |
-| `v V` | visual, then `d c y` |
+| `J` | join lines |
+| `v V ctrl+v` | visual, line, block |
+| `> < ~ u U` | indent and case, in visual |
+| `o` | swap ends of a selection |
+| `I A` in visual-block | insert down the whole block |
 | `u`, `ctrl+r` | undo, redo |
 | `[` `]` `\` | previous day, next day, back to today |
+| `?` | binding list |
 | `:q` `:w` `:wq`, `ZZ`, `ctrl+c` | quit and save |
 
 Counts work: `3j`, `d2w`, `2dd`.
 
 Not in yet: `.` repeat, named registers, macros, marks, `/` search, and
 glamour rendering in normal mode.
+
+## Looks
+
+A rounded border with the note below it and the status line under a divider.
+The mode sits bottom left and changes color per mode; the filename sits hard
+right. Line numbers are hybrid, absolute on the cursor's line and relative
+everywhere else, in a gutter that is always reserved so text never shifts.
+
+Everything is drawn in ANSI base colors, so the note takes its palette from
+your terminal theme rather than fighting it. The caret is the real terminal
+cursor: your cursor color, a block in normal and a bar in insert.
 
 ## Development
 
