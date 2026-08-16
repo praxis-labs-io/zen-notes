@@ -83,12 +83,15 @@ mode, and the filename hard right. Line numbers are hybrid, absolute on the
 cursor's line and relative everywhere else, all in one column, in a gutter
 that is always reserved so text never shifts.
 
-Everything is drawn in ANSI base colors, so the note takes its palette from
-your terminal theme rather than fighting it. The caret is the real terminal
-cursor: your cursor color, a block in normal and a bar in insert. The one
-exception is the visual selection, which needs a background a single step off
-your own; zen-notes asks the terminal whether it is light or dark and picks
-to suit, assuming dark until the answer arrives.
+No color is hardcoded. Text, gutter, status bar and help all use ANSI slots
+0 to 15, so they come from your terminal theme. The caret is the real
+terminal cursor, in your cursor color: a block in normal, a bar in insert.
+
+The selection is the one computed color. It has to be a background a single
+step off your own, so zen-notes asks the terminal for its background and
+shifts the lightness while keeping the hue, which keeps the highlight inside
+your theme. If the terminal will not answer, and some multiplexers will not,
+it falls back to a neutral grey and assumes dark.
 
 ## Development
 

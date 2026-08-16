@@ -1,6 +1,11 @@
 package editor
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"charm.land/lipgloss/v2"
+)
 
 // Mode is the editing mode the next keystroke will be read in.
 type Mode int
@@ -143,6 +148,7 @@ type Editor struct {
 	height         int
 	dirty          bool
 	darkBackground bool
+	selection      lipgloss.Style
 	quit           bool
 	saveWanted     bool
 }
@@ -157,6 +163,7 @@ func New(text string) *Editor {
 		// Assume dark until the terminal answers. A light selection on a dark
 		// background is the louder mistake of the two.
 		darkBackground: true,
+		selection:      darkSelection,
 		height:         20,
 	}
 }
@@ -850,6 +857,7 @@ func (e *Editor) operateLines(op rune, from, to int) {
 	e.reg = register{text: strings.Join(lines, "\n"), linewise: true}
 
 	if op == 'y' {
+		e.reportYank(to-from+1, "line")
 		e.cursor = Pos{from, e.cursor.Col}
 		e.clampCursor()
 		return
@@ -890,6 +898,7 @@ func (e *Editor) operateChars(op rune, from, to Pos) {
 	}
 	if op == 'y' {
 		e.reg = register{text: e.textBetween(from, to)}
+		e.reportYank(len([]rune(e.reg.text)), "char")
 		e.cursor = from
 		e.clampCursor()
 		return
@@ -904,6 +913,15 @@ func (e *Editor) operateChars(op rune, from, to Pos) {
 		return
 	}
 	e.clampCursor()
+}
+
+// reportYank says what a yank took, since nothing on screen changes.
+func (e *Editor) reportYank(n int, unit string) {
+	plural := "s"
+	if n == 1 {
+		plural = ""
+	}
+	e.message = fmt.Sprintf("yanked %d %s%s", n, unit, plural)
 }
 
 // textBetween reads a range without changing the buffer.

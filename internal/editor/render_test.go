@@ -1,11 +1,15 @@
 package editor
 
 import (
+	"fmt"
+	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/lucasb-eyer/go-colorful"
 )
 
 // classLetters gives each token class a letter so a whole line's
@@ -388,4 +392,70 @@ func TestSelectionAssumesDarkUntilToldOtherwise(t *testing.T) {
 	if !strings.Contains(dark, "237") {
 		t.Errorf("default selection = %q, want the dark one", ansi.Strip(dark))
 	}
+}
+
+// The selection keeps the terminal background's hue, so it reads as part of
+// the theme rather than a grey patch laid over it.
+func TestSelectionFollowsTheTerminalTheme(t *testing.T) {
+	navy := colorful.Color{R: 0.05, G: 0.06, B: 0.14}
+	e := New("abcd")
+	e.SetBackground(navy)
+	feed(t, e, "vl")
+
+	out := e.Render(20, 3).Content
+	hex := selectionHex(t, out)
+	got, err := colorful.Hex(hex)
+	if err != nil {
+		t.Fatalf("selection colour %q: %v", hex, err)
+	}
+
+	wantH, _, wantL := navy.Hsl()
+	gotH, _, gotL := got.Hsl()
+	if math.Abs(gotH-wantH) > 1 {
+		t.Errorf("hue = %.1f, want the theme's %.1f", gotH, wantH)
+	}
+	if gotL <= wantL {
+		t.Errorf("lightness = %.3f, want lighter than the background %.3f", gotL, wantL)
+	}
+	if gotL-wantL > 0.3 {
+		t.Errorf("lightness jumped %.3f, want a subtle step", gotL-wantL)
+	}
+}
+
+func TestSelectionLightensDarkThemesAndDarkensLightOnes(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		bg      colorful.Color
+		lighter bool
+	}{
+		{"dark theme", colorful.Color{R: 0.05, G: 0.06, B: 0.14}, true},
+		{"light theme", colorful.Color{R: 0.97, G: 0.96, B: 0.94}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New("abcd")
+			e.SetBackground(tt.bg)
+			feed(t, e, "vl")
+
+			got, err := colorful.Hex(selectionHex(t, e.Render(20, 3).Content))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			_, _, gotL := got.Hsl()
+			_, _, bgL := tt.bg.Hsl()
+			if tt.lighter != (gotL > bgL) {
+				t.Errorf("selection lightness %.3f against background %.3f", gotL, bgL)
+			}
+		})
+	}
+}
+
+// selectionHex pulls the RGB background out of the rendered escape sequence.
+func selectionHex(t *testing.T, content string) string {
+	t.Helper()
+	m := regexp.MustCompile(`\x1b\[48;2;(\d+);(\d+);(\d+)m`).FindStringSubmatch(content)
+	if m == nil {
+		t.Fatalf("no truecolor selection background in %q", content)
+	}
+	n := func(s string) int { v, _ := strconv.Atoi(s); return v }
+	return fmt.Sprintf("#%02x%02x%02x", n(m[1]), n(m[2]), n(m[3]))
 }

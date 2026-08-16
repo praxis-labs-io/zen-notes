@@ -354,6 +354,39 @@ func TestYankAndPut(t *testing.T) {
 	}
 }
 
+// Yanking changes nothing on screen, so it says what it took.
+func TestYankReportsWhatItTook(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"one line", "a\nb\nc", "yy", "yanked 1 line"},
+		{"several lines", "a\nb\nc", "2yy", "yanked 2 lines"},
+		{"Y", "a\nb", "Y", "yanked 1 line"},
+		{"a word", "foo bar", "yiw", "yanked 3 chars"},
+		{"one char", "abc", "yl", "yanked 1 char"},
+		{"a visual range", "abcdef", "vlly", "yanked 3 chars"},
+		{"a visual line", "a\nb", "Vy", "yanked 1 line"},
+		{"a block", "ab\nab", "<c-v>jy", "yanked 2 lines"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Message(); got != tt.want {
+				t.Errorf("Message = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeleteDoesNotAnnounceItself(t *testing.T) {
+	e := run(t, "a\nb\nc", "dd")
+	if e.Message() != "" {
+		t.Fatalf("Message = %q, want nothing. The change is visible already", e.Message())
+	}
+}
+
 func TestDeletedTextGoesToTheRegister(t *testing.T) {
 	e := run(t, "foo bar", "dw$p")
 	if e.Text() != "barfoo " {

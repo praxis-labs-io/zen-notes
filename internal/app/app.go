@@ -110,7 +110,7 @@ func waitForChange(w *note.Watcher) tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.BackgroundColorMsg:
-		m.ed.SetDarkBackground(msg.IsDark())
+		m.ed.SetBackground(msg.Color)
 		return m, nil
 
 	case tea.WindowSizeMsg:

@@ -1,10 +1,12 @@
 package editor
 
 import (
+	"image/color"
 	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/lucasb-eyer/go-colorful"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -22,8 +24,8 @@ var classStyles = map[tokenClass]lipgloss.Style{
 	tokLink:      lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("4")),
 }
 
-// Selection is a background one step off the terminal's own, dim enough that
-// the syntax colors and the terminal cursor both stay legible on top of it.
+// Fallback selections for when the terminal will not say what its background
+// is, which happens under some multiplexers.
 var (
 	darkSelection  = lipgloss.NewStyle().Background(lipgloss.Color("237"))
 	lightSelection = lipgloss.NewStyle().Background(lipgloss.Color("253"))
@@ -34,16 +36,35 @@ var (
 	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
-// SetDarkBackground tunes the selection to the terminal's background, which
-// the app learns by asking the terminal at startup.
-func (e *Editor) SetDarkBackground(dark bool) { e.darkBackground = dark }
-
-func (e *Editor) selectionStyle() lipgloss.Style {
-	if e.darkBackground {
-		return darkSelection
+// SetDarkBackground picks a fallback selection when only the light or dark
+// bias is known, not the colour itself.
+func (e *Editor) SetDarkBackground(dark bool) {
+	e.darkBackground = dark
+	e.selection = darkSelection
+	if !dark {
+		e.selection = lightSelection
 	}
-	return lightSelection
 }
+
+// SetBackground tunes the selection to the terminal's own background, keeping
+// its hue so the highlight belongs to the theme instead of greying it out.
+func (e *Editor) SetBackground(c color.Color) {
+	col, ok := colorful.MakeColor(c)
+	if !ok {
+		return
+	}
+	h, s, l := col.Hsl()
+	e.darkBackground = l < 0.5
+
+	if e.darkBackground {
+		l = min(l+0.14, 1)
+	} else {
+		l = max(l-0.12, 0)
+	}
+	e.selection = lipgloss.NewStyle().Background(lipgloss.Color(colorful.Hsl(h, s, l).Hex()))
+}
+
+func (e *Editor) selectionStyle() lipgloss.Style { return e.selection }
 
 // GutterWidth is the widest line number plus the space before the text.
 // Reserved at all times, so nothing shifts as the line count grows.
