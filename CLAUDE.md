@@ -167,9 +167,6 @@ Four long-running buckets. Every ticket belongs to exactly one:
 - **Release & Distribution**: how the binary gets from `main` to a user and
   stays current.
 
-The other zen teams carry a fifth, Website. zen-notes will not have one, so
-there is no such bucket here.
-
 ### Tickets
 
 - Every ticket gets the team, exactly one project, a priority, and a status. No
