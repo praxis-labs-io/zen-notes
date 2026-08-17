@@ -193,15 +193,26 @@ func (m *Model) browseKey(key editor.Key) bool {
 	case '[':
 		m.step(m.store.Prev, "no earlier note")
 	case ']':
-		m.step(m.store.Next, "no later note")
+		m.step(m.nextDay, "no later note")
 	case '\\':
-		m.open(note.Today(), true)
+		m.open(m.now(), true)
 	case '?':
 		m.help = true
 	default:
 		return false
 	}
 	return true
+}
+
+// nextDay is the next saved day, falling back to today. Today has no file
+// until it is edited, so Store.Next alone strands a browser in the past.
+func (m *Model) nextDay(d note.Day) (note.Day, bool, error) {
+	day, ok, err := m.store.Next(d)
+	if err != nil || ok {
+		return day, ok, err
+	}
+	today := m.now()
+	return today, d.Before(today), nil
 }
 
 // step moves to an adjacent day that has a note, saving the current one first.
@@ -216,7 +227,7 @@ func (m *Model) step(find func(note.Day) (note.Day, bool, error), missing string
 		m.setStatus(missing)
 		return
 	}
-	m.open(day, day == note.Today())
+	m.open(day, day == m.now())
 }
 
 // open switches to another day. follow marks whether the app should still

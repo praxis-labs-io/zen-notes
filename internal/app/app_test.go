@@ -250,6 +250,54 @@ func TestBrowsePreviousAndNextDay(t *testing.T) {
 	}
 }
 
+func TestBrowsingForwardReturnsToAnUnwrittenToday(t *testing.T) {
+	m := newTestModel(t, "")
+	past := m.day.Add(-2)
+	if err := m.store.Save(past, "older"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	press(m, "[", "]")
+
+	if m.day != note.Today() {
+		t.Fatalf("day = %v, want today. An unedited today has no file to step to", m.day)
+	}
+	if !m.followToday {
+		t.Fatal("back on today, but the midnight rollover stayed off")
+	}
+}
+
+func TestBrowsingForwardFollowsTheClockPastMidnight(t *testing.T) {
+	m := newTestModel(t, "")
+	past := m.day.Add(-2)
+	if err := m.store.Save(past, "older"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	press(m, "[")
+
+	tomorrow := note.Today().Add(1)
+	m.now = func() note.Day { return tomorrow }
+	press(m, "]")
+
+	if m.day != tomorrow {
+		t.Fatalf("day = %v, want %v. Forward browsing read a different clock", m.day, tomorrow)
+	}
+	if !m.followToday {
+		t.Fatal("landed on the current day, but the midnight rollover stayed off")
+	}
+}
+
+func TestBrowsingPastTheNewestNoteSaysSo(t *testing.T) {
+	m := newTestModel(t, "today")
+	press(m, "]")
+	if m.day != note.Today() {
+		t.Fatalf("day = %v, want to stay put", m.day)
+	}
+	if m.status == "" {
+		t.Fatal("running out of notes said nothing")
+	}
+}
+
 func TestBrowsingSavesTheCurrentDayFirst(t *testing.T) {
 	m := newTestModel(t, "")
 	past := m.day.Add(-2)
