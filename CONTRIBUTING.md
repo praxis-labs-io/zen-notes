@@ -165,9 +165,8 @@ Not wanted, and these have been considered:
 - Anything that reaches the network. Sync is your sync service's job, which is
   why the storage directory is a variable.
 
-Deferred rather than rejected, and worth an issue first: markdown rendered
-with glamour in normal mode, search across days, and rolling unchecked boxes
-forward to the next day.
+Deferred rather than rejected, and worth an issue first: search across days,
+and rolling unchecked boxes forward to the next day.
 
 Open an issue before a large change. A pull request that gets rejected on
 scope is a waste of your evening.
