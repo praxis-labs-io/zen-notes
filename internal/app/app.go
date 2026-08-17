@@ -195,7 +195,7 @@ func (m *Model) browseKey(key editor.Key) bool {
 	case ']':
 		m.step(m.nextDay, "no later note")
 	case '\\':
-		m.open(note.Today(), true)
+		m.open(m.now(), true)
 	case '?':
 		m.help = true
 	default:
@@ -211,7 +211,7 @@ func (m *Model) nextDay(d note.Day) (note.Day, bool, error) {
 	if err != nil || ok {
 		return day, ok, err
 	}
-	today := note.Today()
+	today := m.now()
 	return today, d.Before(today), nil
 }
 
@@ -227,7 +227,7 @@ func (m *Model) step(find func(note.Day) (note.Day, bool, error), missing string
 		m.setStatus(missing)
 		return
 	}
-	m.open(day, day == note.Today())
+	m.open(day, day == m.now())
 }
 
 // open switches to another day. follow marks whether the app should still
