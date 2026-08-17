@@ -7,14 +7,19 @@ read first is the scope section at the bottom.
 
 ```
 go build ./...
-go test ./...
 go test -race ./...
 go vet ./...
 gofmt -l .
+golangci-lint run ./...
+go mod tidy && git diff --exit-code go.mod go.sum
 ```
 
-All five should be clean before you open a pull request. `gofmt -l .` printing
-nothing is the pass.
+All of those should be clean before you open a pull request. `gofmt -l .`
+printing nothing is the pass.
+
+CI runs the same checks plus a cross-compile over darwin, linux and windows,
+on amd64 and arm64. golangci-lint is pinned in the workflow; if your local
+version differs you will see findings CI does not, or the reverse.
 
 To try your build:
 

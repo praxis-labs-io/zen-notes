@@ -119,10 +119,6 @@ type pending struct {
 	keys   []rune
 }
 
-func (p pending) empty() bool {
-	return p.count1 == 0 && p.op == 0 && p.count2 == 0 && p.await == 0
-}
-
 // count multiplies the operator and motion counts, as vim does for d2w.
 func (p pending) count() int {
 	c := 1
@@ -570,9 +566,10 @@ func (e *Editor) operator(r rune) bool {
 		e.pend = pending{}
 		return true
 	}
-	if r == '>' {
+	switch r {
+	case '>':
 		r = opIndent
-	} else if r == '<' {
+	case '<':
 		r = opDedent
 	}
 	if r != 'd' && r != 'c' && r != 'y' && r != opIndent && r != opDedent {
@@ -795,9 +792,10 @@ func (e *Editor) repeatFind(reverse bool) {
 
 	n := e.pend.count()
 	saved := e.cursor
-	if kind == 't' {
+	switch kind {
+	case 't':
 		e.cursor.Col++
-	} else if kind == 'T' {
+	case 'T':
 		e.cursor.Col--
 	}
 

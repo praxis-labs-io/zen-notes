@@ -109,14 +109,15 @@ func (s *Store) Save(d Day, content string) error {
 		return fmt.Errorf("create temp note: %w", err)
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp)
+	// Gone already once the rename lands, so a failure here says nothing.
+	defer func() { _ = os.Remove(tmp) }()
 
 	if _, err := f.WriteString(content); err != nil {
-		f.Close()
+		_ = f.Close()
 		return fmt.Errorf("write temp note: %w", err)
 	}
 	if err := f.Sync(); err != nil {
-		f.Close()
+		_ = f.Close()
 		return fmt.Errorf("sync temp note: %w", err)
 	}
 	if err := f.Close(); err != nil {

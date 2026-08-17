@@ -18,7 +18,7 @@ func TestWatcherReportsForeignWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Watch: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	other, err := New(s.Dir())
 	if err != nil {
@@ -39,7 +39,7 @@ func TestWatcherIgnoresOtherFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Watch: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if err := os.WriteFile(filepath.Join(s.Dir(), "notes.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -59,7 +59,9 @@ func TestWatcherClosesItsChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Watch: %v", err)
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
 
 	select {
 	case _, open := <-w.Changes():

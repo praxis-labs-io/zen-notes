@@ -38,7 +38,7 @@ func run(dir string) error {
 	if err != nil {
 		return err
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	model, err := app.NewModel(store, watcher)
 	if err != nil {

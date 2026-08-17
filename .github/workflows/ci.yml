@@ -1,0 +1,112 @@
+# Continuous Integration workflow for zen-notes
+# Runs on pushes to main and non-draft pull requests
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    # ready_for_review is needed so marking a draft ready triggers a run; the
+    # default types do not fire on that transition.
+    types: [opened, synchronize, reopened, ready_for_review]
+    # No branch filter. A PR onto a stacked branch would otherwise trigger
+    # nothing, and required checks that never ran report as satisfied.
+
+concurrency:
+  # The action is in the key so a ready_for_review run cannot be cancelled by a
+  # synchronize run that raced it and skipped, leaving the PR with no CI.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.action }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: "1.26"
+
+# Nothing here writes. A job that needs more asks for it itself.
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint + Format
+    # Skip while the PR is a draft; push events have no PR object and always run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Check gofmt
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not formatted correctly:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          # Keep this matching the local brew version, or local runs and CI
+          # stop agreeing about what passes.
+          version: v2.12.2
+
+  test:
+    name: Test
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run tests
+        run: go test -race -coverprofile=coverage.out ./...
+
+  build:
+    name: Build
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [darwin, linux, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: go build -v .

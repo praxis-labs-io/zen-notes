@@ -24,7 +24,7 @@ func Watch(dir string) (*Watcher, error) {
 		return nil, fmt.Errorf("create watcher: %w", err)
 	}
 	if err := fs.Add(dir); err != nil {
-		fs.Close()
+		_ = fs.Close()
 		return nil, fmt.Errorf("watch %s: %w", dir, err)
 	}
 

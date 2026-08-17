@@ -9,7 +9,11 @@ source, MIT. `README.md` is the user-facing description and the full keymap;
 `CONTRIBUTING.md` holds the scope rules and what has already been rejected.
 Read those rather than restating them here.
 
-`main` is the only branch. There is no CI, no Makefile, and no git hooks.
+`main` is the only branch. There is no Makefile and there are no git hooks.
+
+CI is `.github/workflows/ci.yml`: lint and format, test, and a cross-compile
+matrix, on pushes to `main` and non-draft PRs. It runs the same checks listed
+below, so a clean local run is a clean CI run.
 
 The installed binary is built from here to `~/.local/bin/zen-notes`. **Rebuild
 after changes or Drew keeps running the old code:**
@@ -26,16 +30,20 @@ so a release the users can install means a new tag.
 
 ```sh
 go build ./...
-go test ./...
 go test -race ./...
 go vet ./...
 gofmt -l .                                      # prints nothing on a pass
+golangci-lint run ./...
+go mod tidy && git diff --exit-code go.mod go.sum
 go test ./internal/editor -run TestName         # single test
 go test ./internal/editor -run 'CursorLine'     # a group, by regexp
 ```
 
-All five checks clean before anything is committed. `gofmt -l .` exits 0 even
-when it lists files, so a `&&` chain will not catch it; read the output.
+All of those clean before anything is committed. `gofmt -l .` exits 0 even when
+it lists files, so a `&&` chain will not catch it; read the output.
+
+golangci-lint is pinned to v2.12.2 in the workflow to match the local brew
+version. Bump both together or local runs and CI stop agreeing.
 
 Never run the app against the real notes directory. Use a scratch one:
 

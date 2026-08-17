@@ -472,8 +472,8 @@ func TestExpiredStatusLeavesTheStatusBar(t *testing.T) {
 
 func TestYankSchedulesTheFlashToGoOut(t *testing.T) {
 	m := newTestModel(t, "foo bar")
+	m.Update(keyMsg("y"))
 	_, cmd := m.Update(keyMsg("y"))
-	_, cmd = m.Update(keyMsg("y"))
 
 	if !m.ed.YankFlash() {
 		t.Fatal("yank did not light anything up")

@@ -316,7 +316,7 @@ func (m *Model) reload(path string) {
 func (m *Model) quit() tea.Cmd {
 	m.save()
 	if m.watch != nil {
-		m.watch.Close()
+		_ = m.watch.Close()
 	}
 	return tea.Quit
 }
