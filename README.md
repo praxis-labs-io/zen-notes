@@ -9,14 +9,14 @@ else.
 ## Install
 
 ```
-go install github.com/drucial/zen-notes@latest
+go install github.com/praxis-labs-io/zen-notes@latest
 ```
 
 That drops the binary in `$GOBIN`, or `$GOPATH/bin` if that is unset. To put
 it somewhere else:
 
 ```
-GOBIN=$HOME/.local/bin go install github.com/drucial/zen-notes@latest
+GOBIN=$HOME/.local/bin go install github.com/praxis-labs-io/zen-notes@latest
 ```
 
 Then run it from anywhere:

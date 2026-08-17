@@ -8,8 +8,8 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/drucial/zen-notes/internal/app"
-	"github.com/drucial/zen-notes/internal/note"
+	"github.com/praxis-labs-io/zen-notes/internal/app"
+	"github.com/praxis-labs-io/zen-notes/internal/note"
 )
 
 func main() {

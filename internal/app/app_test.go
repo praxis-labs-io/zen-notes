@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/drucial/zen-notes/internal/editor"
-	"github.com/drucial/zen-notes/internal/note"
+	"github.com/praxis-labs-io/zen-notes/internal/editor"
+	"github.com/praxis-labs-io/zen-notes/internal/note"
 )
 
 func TestDecideReload(t *testing.T) {

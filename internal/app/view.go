@@ -6,8 +6,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/drucial/zen-notes/internal/editor"
 	"github.com/mattn/go-runewidth"
+	"github.com/praxis-labs-io/zen-notes/internal/editor"
 )
 
 // chromeRows is the status line, the only row the note does not get.

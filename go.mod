@@ -1,4 +1,4 @@
-module github.com/drucial/zen-notes
+module github.com/praxis-labs-io/zen-notes
 
 go 1.26.4
 

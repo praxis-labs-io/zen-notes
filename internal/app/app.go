@@ -8,8 +8,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/drucial/zen-notes/internal/editor"
-	"github.com/drucial/zen-notes/internal/note"
+	"github.com/praxis-labs-io/zen-notes/internal/editor"
+	"github.com/praxis-labs-io/zen-notes/internal/note"
 )
 
 // saveInterval is how often a dirty buffer reaches disk. Short enough that a
