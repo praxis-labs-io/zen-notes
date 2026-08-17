@@ -82,7 +82,7 @@ func (m *Model) statusBar(width int) string {
 }
 
 // cursor places the real terminal cursor. Color stays nil so the terminal's
-// own cursor color applies, and the shape says which mode you are in.
+// own applies, and mode picks the pair: blinking bar to type in, steady block.
 func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
 	if cmd := m.ed.CommandLine(); cmd != "" {
 		c := tea.NewCursor(runewidth.StringWidth(cmd), m.textHeight())
@@ -90,10 +90,12 @@ func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
 		return c
 	}
 	c := tea.NewCursor(r.CursorCol, r.CursorRow)
-	c.Shape = tea.CursorBlock
 	if m.ed.Mode() == editor.ModeInsert {
 		c.Shape = tea.CursorBar
+		return c
 	}
+	c.Shape = tea.CursorBlock
+	c.Blink = false
 	return c
 }
 

@@ -396,28 +396,39 @@ func TestViewShowsTheDateAndMode(t *testing.T) {
 	}
 }
 
-func TestCursorShapePerMode(t *testing.T) {
+func TestCursorPerMode(t *testing.T) {
 	tests := []struct {
-		name string
-		keys []string
-		want tea.CursorShape
+		name  string
+		keys  []string
+		bar   string // status bar text, so a row that never reached the mode fails
+		shape tea.CursorShape
+		blink bool
 	}{
-		{"normal is a block", nil, tea.CursorBlock},
-		{"insert is a bar", []string{"i"}, tea.CursorBar},
-		{"visual is a block", []string{"v"}, tea.CursorBlock},
-		{"visual line is a block", []string{"V"}, tea.CursorBlock},
-		{"back to normal is a block again", []string{"i", "<esc>"}, tea.CursorBlock},
+		{"normal is a steady block", nil, "NORMAL", tea.CursorBlock, false},
+		{"insert is a blinking bar", []string{"i"}, "INSERT", tea.CursorBar, true},
+		{"visual is a steady block", []string{"v"}, "VISUAL", tea.CursorBlock, false},
+		{"visual line is a steady block", []string{"V"}, "V-LINE", tea.CursorBlock, false},
+		{"visual block is a steady block", []string{"<c-v>"}, "V-BLOCK", tea.CursorBlock, false},
+		{"the command line is a blinking bar", []string{":"}, ":", tea.CursorBar, true},
+		{"back to normal is a steady block again", []string{"i", "<esc>"}, "NORMAL", tea.CursorBlock, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := newTestModel(t, "hello")
 			press(m, tt.keys...)
-			c := m.View().Cursor
+			v := m.View()
+			if !contains(v.Content, tt.bar) {
+				t.Fatalf("status bar is missing %q", tt.bar)
+			}
+			c := v.Cursor
 			if c == nil {
 				t.Fatal("no cursor reported")
 			}
-			if c.Shape != tt.want {
-				t.Errorf("shape = %v, want %v", c.Shape, tt.want)
+			if c.Shape != tt.shape {
+				t.Errorf("shape = %v, want %v", c.Shape, tt.shape)
+			}
+			if c.Blink != tt.blink {
+				t.Errorf("blink = %v, want %v", c.Blink, tt.blink)
 			}
 		})
 	}
@@ -760,6 +771,8 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "enter":
 		return tea.KeyPressMsg{Code: tea.KeyEnter}
+	case "<c-v>":
+		return tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl}
 	}
 	r := []rune(k)[0]
 	// Match the terminal: a capital arrives lowercase in Code, shifted in Text.
