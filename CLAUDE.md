@@ -152,10 +152,25 @@ Work is tracked in Linear: Praxis Labs workspace, reached through the
 the **Zen Notes** team (key `ZNN`, tickets `ZNN-###`). Address projects and
 statuses **by name, never a UUID**; ids don't survive workspace moves.
 
-The team is new: no projects and no tickets yet. Bucket names are shared across
-teams in this workspace, so `save_issue` resolving a bare project name can land
-on another team's copy and fail the call. Pass the Zen Notes project id in that
-one argument when it does.
+Bucket names are shared across teams in this workspace, so `save_issue`
+resolving a bare project name can land on another team's copy and fail the
+call. Pass the Zen Notes project id in that one argument when it does.
+
+### Projects
+
+Four long-running buckets. Every ticket belongs to exactly one:
+
+- **Polish & Bugs**: bugs and rough edges in surfaces that already ship. The
+  dogfood inbox.
+- **Feature Backlog**: net-new capabilities. Ideas live here until promoted.
+- **Performance and Code-Quality**: improves the code, no user-visible change.
+- **Release & Distribution**: how the binary gets from `main` to a user and
+  stays current.
+
+The other zen teams carry a fifth, Website. zen-notes will not have one, so
+there is no such bucket here.
+
+### Tickets
 
 - Every ticket gets the team, exactly one project, a priority, and a status. No
   orphans.
