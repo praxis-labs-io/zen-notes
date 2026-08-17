@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # SessionStart hook: point git at the tracked hooks so the pre-push guard
 # works immediately in a fresh checkout.
 set -euo pipefail

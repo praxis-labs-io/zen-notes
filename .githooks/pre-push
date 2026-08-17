@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Reject direct pushes to main. Feature work goes ticket → branch → PR.
 # Install with: git config core.hooksPath .githooks
 set -euo pipefail
