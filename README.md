@@ -99,15 +99,20 @@ mode, and the filename hard right. Line numbers are hybrid, absolute on the
 cursor's line and relative everywhere else, all in one column, in a gutter
 that is always reserved so text never shifts.
 
+The cursor's line carries a band across the full width, gutter included, in
+normal and insert mode. It goes out in visual mode, where the selection is
+the thing to look at. A wrapped line is banded on every row it takes.
+
 No color is hardcoded. Text, gutter, status bar and help all use ANSI slots
 0 to 15, so they come from your terminal theme. The caret is the real
 terminal cursor, in your cursor color: a block in normal, a bar in insert.
 
-The selection, the yank flash and the search highlight are the three computed
-colors. Each needs a background a step off your own, so zen-notes asks the
-terminal for its background and shifts the lightness while keeping the hue,
-which keeps them inside your theme. A step near white reads stronger than the
-same step near black, so light themes get a smaller one. The background is
+The cursor line, the selection, the yank flash and the search highlight are
+the four computed colors. Each needs a background a step off your own, so
+zen-notes asks the terminal for its background and shifts the lightness while
+keeping the hue, which keeps them inside your theme. A step near white reads
+stronger than the same step near black, so light themes get a smaller one,
+and the cursor line takes the smallest step of the four. The background is
 asked for again whenever the window regains focus, so switching theme
 mid-session is picked up. If the terminal will not answer, and some
 multiplexers will not, it falls back to a neutral grey and assumes dark.

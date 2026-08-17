@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -163,6 +164,7 @@ type Editor struct {
 	selection      lipgloss.Style
 	flashStyle     lipgloss.Style
 	matchStyle     lipgloss.Style
+	cursorLine     color.Color
 	flash          flashRange
 	quit           bool
 	saveWanted     bool
@@ -181,6 +183,7 @@ func New(text string) *Editor {
 		selection:      darkSelection,
 		flashStyle:     darkFlash,
 		matchStyle:     darkMatch,
+		cursorLine:     darkCursorLine,
 		height:         20,
 	}
 }

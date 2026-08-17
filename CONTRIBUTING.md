@@ -72,7 +72,7 @@ free.
 new inode over the target, and a watch on the file follows the old one.
 
 **No hardcoded hex.** Everything is an ANSI slot so it inherits the terminal
-theme. The three exceptions are computed from the terminal's own background
+theme. The four exceptions are computed from the terminal's own background
 color, and there are fallbacks for terminals that will not report it.
 
 ## Test conventions

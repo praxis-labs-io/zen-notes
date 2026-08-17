@@ -245,11 +245,13 @@ func TestRenderCursorPastTheLastRune(t *testing.T) {
 }
 
 func TestRenderNoLongerPaintsTheCursor(t *testing.T) {
-	e := New("hello")
-	got := e.Render(20, 10)
+	got := New("hello").Render(20, 10)
 
-	if !strings.Contains(got.Content, "hello") {
-		t.Fatal("the cursor is still painted into the content, splitting the text")
+	if !strings.Contains(ansi.Strip(got.Content), "hello") {
+		t.Fatal("something is painted into the middle of the text")
+	}
+	if strings.Contains(got.Content, "\x1b[7m") {
+		t.Fatal("the cursor cell is inverted; the terminal's own cursor should show through")
 	}
 }
 
@@ -460,6 +462,177 @@ func selectionHex(t *testing.T, content string) string {
 	return fmt.Sprintf("#%02x%02x%02x", n(m[1]), n(m[2]), n(m[3]))
 }
 
+// bgHex is the RGB background rendered behind the first occurrence of ch,
+// which is how a test names one highlight when several are on screen.
+func bgHex(t *testing.T, content, ch string) string {
+	t.Helper()
+	pattern := `\x1b\[[0-9;]*48;2;(\d+);(\d+);(\d+)m` + regexp.QuoteMeta(ch)
+	m := regexp.MustCompile(pattern).FindStringSubmatch(content)
+	if m == nil {
+		t.Fatalf("no background behind %q in %q", ch, content)
+	}
+	n := func(s string) int { v, _ := strconv.Atoi(s); return v }
+	return fmt.Sprintf("#%02x%02x%02x", n(m[1]), n(m[2]), n(m[3]))
+}
+
+func renderRows(e *Editor, width, height int) []string {
+	return strings.Split(e.Render(width, height).Content, "\n")
+}
+
+func isLit(row string) bool { return strings.Contains(row, "\x1b[48;") }
+
+var navy = colorful.Color{R: 0.05, G: 0.06, B: 0.14}
+
+func TestCursorLineIsLit(t *testing.T) {
+	rows := renderRows(New("one\ntwo"), 20, 3)
+	if !isLit(rows[0]) {
+		t.Errorf("the cursor's row is not lit: %q", rows[0])
+	}
+	if isLit(rows[1]) {
+		t.Errorf("a row without the cursor is lit: %q", rows[1])
+	}
+}
+
+func TestCursorLineMovesWithTheCursor(t *testing.T) {
+	e := run(t, "one\ntwo\nthree", "j")
+	rows := renderRows(e, 20, 3)
+	if isLit(rows[0]) || !isLit(rows[1]) || isLit(rows[2]) {
+		t.Fatalf("the band did not follow the cursor: %q", rows)
+	}
+}
+
+func TestCursorLineSpansTheFullWidth(t *testing.T) {
+	rows := renderRows(New("hi\nthere"), 20, 3)
+	if got := ansi.StringWidth(rows[0]); got != 20 {
+		t.Errorf("cursor row is %d wide, want the full 20", got)
+	}
+	if got := ansi.StringWidth(rows[1]); got == 20 {
+		t.Errorf("a row without the cursor was padded to the width")
+	}
+}
+
+func TestCursorLineCoversTheGutter(t *testing.T) {
+	rows := renderRows(New("one\ntwo"), 20, 3)
+	number, _, _ := strings.Cut(rows[0], "o")
+	if !isLit(number) {
+		t.Errorf("the line number sits outside the band: %q", number)
+	}
+}
+
+func TestCursorLineCoversEveryWrappedRow(t *testing.T) {
+	e := New("hello world this wraps over rows")
+	rows := renderRows(e, 14, 5)
+	for i := range 2 {
+		if !isLit(rows[i]) {
+			t.Errorf("wrapped row %d is not lit: %q", i, rows[i])
+		}
+	}
+}
+
+func TestCursorLineIsOffInVisualMode(t *testing.T) {
+	e := run(t, "one\ntwo", "Vj")
+	if isLit(renderRows(e, 20, 3)[2]) {
+		t.Error("the band is up under a selection")
+	}
+}
+
+func TestCursorLineIsOnInInsertMode(t *testing.T) {
+	e := run(t, "one\ntwo", "i")
+	if !isLit(renderRows(e, 20, 3)[0]) {
+		t.Error("the band went out in insert mode")
+	}
+}
+
+// The band is a wash, not a highlight. Syntax has to read through it.
+func TestCursorLineKeepsTheSyntaxColour(t *testing.T) {
+	e := New("# Heading\nplain")
+	if row := renderRows(e, 20, 3)[0]; !strings.Contains(row, "1;35") {
+		t.Errorf("the heading lost its bold magenta under the band: %q", row)
+	}
+}
+
+func TestSelectionAndFlashWinOverTheCursorLine(t *testing.T) {
+	e := New("abcd")
+	e.SetBackground(navy)
+	line := bgHex(t, e.Render(20, 3).Content, "d")
+
+	feed(t, e, "vl")
+	if got := bgHex(t, e.Render(20, 3).Content, "a"); got == line {
+		t.Errorf("the selection is the same shade as the band: %s", got)
+	}
+	feed(t, e, "y")
+	if got := bgHex(t, e.Render(20, 3).Content, "a"); got == line {
+		t.Errorf("the yank flash is the same shade as the band: %s", got)
+	}
+}
+
+func TestSearchMatchWinsOverTheCursorLine(t *testing.T) {
+	e := New("abcd")
+	e.SetBackground(navy)
+	line := bgHex(t, e.Render(20, 3).Content, "d")
+
+	feed(t, e, "/bc<cr>")
+	if got := bgHex(t, e.Render(20, 3).Content, "b"); got == line {
+		t.Errorf("the match is the same shade as the band: %s", got)
+	}
+}
+
+// The band sits under every line you read, so it has to be the quietest of
+// the computed shades.
+func TestCursorLineIsSubtlerThanTheSelection(t *testing.T) {
+	e := New("abcd")
+	e.SetBackground(navy)
+	band, err := colorful.Hex(bgHex(t, e.Render(20, 3).Content, "a"))
+	if err != nil {
+		t.Fatalf("band colour: %v", err)
+	}
+
+	feed(t, e, "vl")
+	selected, err := colorful.Hex(bgHex(t, e.Render(20, 3).Content, "a"))
+	if err != nil {
+		t.Fatalf("selection colour: %v", err)
+	}
+
+	_, _, bgL := navy.Hsl()
+	_, _, bandL := band.Hsl()
+	_, _, selL := selected.Hsl()
+	if bandL-bgL >= selL-bgL {
+		t.Errorf("band step %.3f, want less than the selection's %.3f", bandL-bgL, selL-bgL)
+	}
+	if bandL <= bgL {
+		t.Errorf("band lightness %.3f, want a step off the background %.3f", bandL, bgL)
+	}
+}
+
+func TestCursorLineFollowsTheTerminalTheme(t *testing.T) {
+	e := New("abcd")
+	e.SetBackground(navy)
+
+	got, err := colorful.Hex(bgHex(t, e.Render(20, 3).Content, "a"))
+	if err != nil {
+		t.Fatalf("band colour: %v", err)
+	}
+	wantH, _, _ := navy.Hsl()
+	if gotH, _, _ := got.Hsl(); math.Abs(gotH-wantH) > 1 {
+		t.Errorf("hue = %.1f, want the theme's %.1f", gotH, wantH)
+	}
+}
+
+func TestCursorLineDarkensLightThemes(t *testing.T) {
+	paper := colorful.Color{R: 0.97, G: 0.96, B: 0.94}
+	e := New("abcd")
+	e.SetBackground(paper)
+
+	got, err := colorful.Hex(bgHex(t, e.Render(20, 3).Content, "a"))
+	if err != nil {
+		t.Fatalf("band colour: %v", err)
+	}
+	_, _, bgL := paper.Hsl()
+	if _, _, gotL := got.Hsl(); gotL >= bgL {
+		t.Errorf("band lightness %.3f, want darker than the background %.3f", gotL, bgL)
+	}
+}
+
 func TestYankFlashCoversWhatWasTaken(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -536,7 +709,8 @@ func TestYankFlashRendersDistinctlyFromSelection(t *testing.T) {
 	feed(t, e, "y")
 	flashed := e.Render(20, 3).Content
 
-	if selectionHex(t, selected) == selectionHex(t, flashed) {
+	// Named by the rune they sit behind: the cursor line is also lit here.
+	if bgHex(t, selected, "a") == bgHex(t, flashed, "a") {
 		t.Fatal("the yank flash is the same colour as the selection")
 	}
 }

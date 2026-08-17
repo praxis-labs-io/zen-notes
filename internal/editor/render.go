@@ -27,24 +27,27 @@ var classStyles = map[tokenClass]lipgloss.Style{
 // Fallbacks for when the terminal will not say what its background is,
 // which happens under some multiplexers.
 var (
-	darkSelection  = lipgloss.NewStyle().Background(lipgloss.Color("237"))
-	lightSelection = lipgloss.NewStyle().Background(lipgloss.Color("253"))
-	darkFlash      = lipgloss.NewStyle().Background(lipgloss.Color("242"))
-	lightFlash     = lipgloss.NewStyle().Background(lipgloss.Color("248"))
-	darkMatch      = lipgloss.NewStyle().Background(lipgloss.Color("240"))
-	lightMatch     = lipgloss.NewStyle().Background(lipgloss.Color("250"))
+	darkSelection   = lipgloss.NewStyle().Background(lipgloss.Color("237"))
+	lightSelection  = lipgloss.NewStyle().Background(lipgloss.Color("253"))
+	darkFlash       = lipgloss.NewStyle().Background(lipgloss.Color("242"))
+	lightFlash      = lipgloss.NewStyle().Background(lipgloss.Color("248"))
+	darkMatch       = lipgloss.NewStyle().Background(lipgloss.Color("240"))
+	lightMatch      = lipgloss.NewStyle().Background(lipgloss.Color("250"))
+	darkCursorLine  = lipgloss.Color("236")
+	lightCursorLine = lipgloss.Color("254")
 )
 
-// How far the selection and the yank flash shift off the background. A step
-// near white reads stronger than the same step near black, so light themes
-// take a smaller one.
+// How far each shade sits off the background. A step near white reads
+// stronger than near black, so light themes take a smaller one.
 const (
-	darkSelectionStep  = 0.14
-	lightSelectionStep = 0.07
-	darkFlashStep      = 0.30
-	lightFlashStep     = 0.16
-	darkMatchStep      = 0.22
-	lightMatchStep     = 0.11
+	darkSelectionStep   = 0.14
+	lightSelectionStep  = 0.07
+	darkFlashStep       = 0.30
+	lightFlashStep      = 0.16
+	darkMatchStep       = 0.22
+	lightMatchStep      = 0.11
+	darkCursorLineStep  = 0.05
+	lightCursorLineStep = 0.025
 )
 
 var (
@@ -57,8 +60,10 @@ var (
 func (e *Editor) SetDarkBackground(dark bool) {
 	e.darkBackground = dark
 	e.selection, e.flashStyle, e.matchStyle = darkSelection, darkFlash, darkMatch
+	e.cursorLine = darkCursorLine
 	if !dark {
 		e.selection, e.flashStyle, e.matchStyle = lightSelection, lightFlash, lightMatch
+		e.cursorLine = lightCursorLine
 	}
 }
 
@@ -73,19 +78,26 @@ func (e *Editor) SetBackground(c color.Color) {
 	h, s, l := col.Hsl()
 	e.darkBackground = l < 0.5
 
-	selStep, flashStep, matchStep := darkSelectionStep, darkFlashStep, darkMatchStep
+	selStep, flashStep := darkSelectionStep, darkFlashStep
+	matchStep, lineStep := darkMatchStep, darkCursorLineStep
 	if !e.darkBackground {
-		selStep, flashStep, matchStep = -lightSelectionStep, -lightFlashStep, -lightMatchStep
+		selStep, flashStep = -lightSelectionStep, -lightFlashStep
+		matchStep, lineStep = -lightMatchStep, -lightCursorLineStep
 	}
 	e.selection = shifted(h, s, l, selStep)
 	e.flashStyle = shifted(h, s, l, flashStep)
 	e.matchStyle = shifted(h, s, l, matchStep)
+	e.cursorLine = shade(h, s, l, lineStep)
 }
 
-// shifted builds a background the given lightness step away from the theme's.
-func shifted(h, s, l, step float64) lipgloss.Style {
+// shade is a colour the given lightness step away from the theme's.
+func shade(h, s, l, step float64) color.Color {
 	l = min(max(l+step, 0), 1)
-	return lipgloss.NewStyle().Background(lipgloss.Color(colorful.Hsl(h, s, l).Hex()))
+	return lipgloss.Color(colorful.Hsl(h, s, l).Hex())
+}
+
+func shifted(h, s, l, step float64) lipgloss.Style {
+	return lipgloss.NewStyle().Background(shade(h, s, l, step))
 }
 
 func (e *Editor) selectionStyle() lipgloss.Style { return e.selection }
@@ -117,18 +129,27 @@ func GutterWidth(lineCount int) int {
 
 // gutter renders the number cell for one screen row. The cursor's line shows
 // its absolute number, every other line its distance, all in one column.
-func gutter(line, cursorLine, width int, first bool) string {
+func gutter(line, cursorLine, width int, first bool, bg color.Color) string {
 	if !first {
-		return strings.Repeat(" ", width)
+		return washed(lipgloss.NewStyle(), bg).Render(strings.Repeat(" ", width))
 	}
 	if line == cursorLine {
-		return currentStyle.Render(pad(strconv.Itoa(line+1), width))
+		return washed(currentStyle, bg).Render(pad(strconv.Itoa(line+1), width))
 	}
 	distance := line - cursorLine
 	if distance < 0 {
 		distance = -distance
 	}
-	return numberStyle.Render(pad(strconv.Itoa(distance), width))
+	return washed(numberStyle, bg).Render(pad(strconv.Itoa(distance), width))
+}
+
+// washed lays the cursor line's background under a style, leaving it alone
+// when there is none.
+func washed(s lipgloss.Style, bg color.Color) lipgloss.Style {
+	if bg == nil {
+		return s
+	}
+	return s.Background(bg)
 }
 
 // pad right aligns s in width, leaving a trailing space before the text.
@@ -176,7 +197,9 @@ func (e *Editor) Render(width, height int) Rendered {
 			continue
 		}
 		row := rows[i]
-		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0)+e.renderRow(row, classes, textWidth))
+		bg := e.cursorLineBG(row.line)
+		text, used := e.renderRow(row, classes, textWidth, bg)
+		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0, bg)+text+trail(bg, textWidth-used))
 	}
 	return Rendered{
 		Content:   strings.Join(out, "\n"),
@@ -210,9 +233,26 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 	return rows, cursorRow, cursorCol
 }
 
-// renderRow styles one screen row, marking any visual selection. It stops at
-// width, because the space a line wraps on stays at the end of the row above.
-func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
+// cursorLineBG is the wash to lay under line, nil for any other line and for
+// visual modes, where the selection is already the thing to look at.
+func (e *Editor) cursorLineBG(line int) color.Color {
+	if line != e.cursor.Line || e.mode.Visual() {
+		return nil
+	}
+	return e.cursorLine
+}
+
+// trail extends the cursor line's wash to the edge of the window.
+func trail(bg color.Color, width int) string {
+	if bg == nil || width <= 0 {
+		return ""
+	}
+	return washed(lipgloss.NewStyle(), bg).Render(strings.Repeat(" ", width))
+}
+
+// renderRow styles one screen row and reports how wide it came out. It stops
+// at width, because the space a line wraps on stays on the row above.
+func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color.Color) (string, int) {
 	runes := e.buf.runes(row.line)
 	lineClasses := classes[row.line]
 	selFrom, selTo, selLines := e.Selection()
@@ -224,7 +264,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
 		if col+w > width {
 			break
 		}
-		style := classStyles[lineClasses[i]]
+		style := washed(classStyles[lineClasses[i]], bg)
 		switch {
 		case e.flashCovers(Pos{row.line, i}):
 			style = e.flashStyle
@@ -236,7 +276,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int) string {
 		sb.WriteString(style.Render(string(runes[i])))
 		col += w
 	}
-	return sb.String()
+	return sb.String(), col
 }
 
 // selected reports whether p is highlighted, which depends on which visual
