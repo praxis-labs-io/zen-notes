@@ -9,7 +9,18 @@ source, MIT. `README.md` is the user-facing description and the full keymap;
 `CONTRIBUTING.md` holds the scope rules and what has already been rejected.
 Read those rather than restating them here.
 
-`main` is the only branch. There is no Makefile and there are no git hooks.
+**`main` is the product branch.** Feature work flows ticket → branch → PR on
+`origin` (see Project Management).
+
+Two things skip the PR and commit straight to `main`:
+
+- Genuinely trivial tweaks. A typo, a one-liner.
+- **Doc-only changes with no code.** Markdown, comments, `CLAUDE.md`, rules files. A PR for prose is ceremony.
+
+A tracked pre-push hook rejects pushes to `main`, so an agent commits these and
+Drew pushes them. Don't reach for `--no-verify`.
+
+There is no Makefile; the checks are plain `go` commands.
 
 CI is `.github/workflows/ci.yml`: lint and format, test, and a cross-compile
 matrix, on pushes to `main` and non-draft PRs. It runs the same checks listed
@@ -26,6 +37,18 @@ Releases are a pushed tag plus `gh release create`. `go install
 github.com/praxis-labs-io/zen-notes@latest` only resolves to a tagged version,
 so a release the users can install means a new tag.
 
+Anything published under Drew's name (PR bodies, issues, release notes, README)
+must be shown to him word-for-word before pushing. His voice: terse,
+considerate, stoic, no strong adverbs, no em-dashes.
+
+## Conventions
+
+@.claude/rules/code-quality.md
+
+That file holds only the Go and Bubble Tea specifics. The principles and voice
+rules are global and load automatically; don't copy them in here, that only
+creates drift.
+
 ## Commands
 
 ```sh
@@ -39,11 +62,23 @@ go test ./internal/editor -run TestName         # single test
 go test ./internal/editor -run 'CursorLine'     # a group, by regexp
 ```
 
-All of those clean before anything is committed. `gofmt -l .` exits 0 even when
-it lists files, so a `&&` chain will not catch it; read the output.
+All of those clean before anything is committed.
+
+Run checks directly, never through a pipe that swallows exit codes. `gofmt -l .`
+exits 0 even when it lists files, and `golangci-lint run | tail` reports success
+on failure.
+
+### Lint version pin
 
 golangci-lint is pinned to v2.12.2 in the workflow to match the local brew
 version. Bump both together or local runs and CI stop agreeing.
+
+### Git hooks
+
+`.githooks/pre-push` is tracked and rejects pushes to `main`.
+`git config core.hooksPath .githooks` wires it up; the SessionStart hook does
+this on every session so a fresh clone is covered. Untracked `.git/hooks/`
+files don't survive a clone, which is why the hook lives here instead.
 
 Never run the app against the real notes directory. Use a scratch one:
 
@@ -172,7 +207,27 @@ Four long-running buckets. Every ticket belongs to exactly one:
 - Every ticket gets the team, exactly one project, a priority, and a status. No
   orphans.
 - Create tickets as we go; never dump a full backlog up front.
+- PR-sized scoping: 1 ticket = 1 branch = 1 PR as the rule of thumb.
 - Keep descriptions lean: clear title, short goal and scope. No boilerplate
   acceptance criteria.
+- Use Linear's generated branch name (`gitBranchName` from the MCP), never an
+  invented one.
+- Reference the ticket id in commits and the PR title/body so Linear auto-links.
 - Status ladder: agent drives Backlog → Todo → In Progress. In Review and Done
   are the GitHub integration's; never write those by hand.
+
+### Shipping
+
+Feature-complete work ships via the global `ship-feature` skill: the check list
+above green, push, draft PR, Copilot + `/code-review`, triage with no tech debt,
+push then mark ready as separate actions. Manual invocation only.
+
+**There is no copy of it in this repo.** Drew's global skills are a symlink into
+drucial-dots and load in every repo, so a copy here only shadows the real one
+and drifts behind it. Edit the skill at its source. A session that cannot see
+the global skill should say so rather than follow a copy nobody maintains.
+
+### Specs and plans
+
+Scratch, never committed. Durable context lives in Linear project descriptions
+and tickets.
