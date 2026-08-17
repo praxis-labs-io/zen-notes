@@ -90,10 +90,12 @@ func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
 		return c
 	}
 	c := tea.NewCursor(r.CursorCol, r.CursorRow)
-	c.Shape = tea.CursorBlock
 	if m.ed.Mode() == editor.ModeInsert {
 		c.Shape = tea.CursorBar
+		return c
 	}
+	c.Shape = tea.CursorBlock
+	c.Blink = false
 	return c
 }
 

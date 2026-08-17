@@ -423,6 +423,32 @@ func TestCursorShapePerMode(t *testing.T) {
 	}
 }
 
+func TestCursorBlinksOnlyInInsert(t *testing.T) {
+	tests := []struct {
+		name string
+		keys []string
+		want bool
+	}{
+		{"normal is steady", nil, false},
+		{"insert blinks", []string{"i"}, true},
+		{"visual is steady", []string{"v"}, false},
+		{"leaving insert is steady again", []string{"i", "<esc>"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel(t, "hello")
+			press(m, tt.keys...)
+			c := m.View().Cursor
+			if c == nil {
+				t.Fatal("no cursor reported")
+			}
+			if c.Blink != tt.want {
+				t.Errorf("blink = %v, want %v", c.Blink, tt.want)
+			}
+		})
+	}
+}
+
 // A nil color leaves the terminal's own cursor color alone, which is the point.
 func TestCursorTakesTheTerminalColor(t *testing.T) {
 	m := newTestModel(t, "hello")
