@@ -84,6 +84,12 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 Counts work: `3j`, `d2w`, `2dd`.
 
+Insert mode follows the Markdown around the cursor. Enter after a heading leaves
+a blank line for body text. Starting an unordered, ordered or task list leaves
+a blank line after preceding prose, then Enter continues its marker and
+indentation; a checked task continues as an unchecked one. Enter on an empty
+list item, or backspace just after its marker, exits with a blank line below.
+
 Search is incremental: the cursor and the highlight follow along as you type,
 and `esc` puts the cursor back where you started. It matches a plain substring
 rather than a regular expression, and ignores case unless the pattern carries
