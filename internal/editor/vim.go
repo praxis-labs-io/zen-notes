@@ -166,6 +166,8 @@ type Editor struct {
 	saveWanted      bool
 	clipboard       string
 	clipboardWanted bool
+	openLink        string
+	openLinkWanted  bool
 }
 
 const undoDepth = 200
@@ -232,6 +234,13 @@ func (e *Editor) TakeClipboardRequest() (string, bool) {
 	text, wanted := e.clipboard, e.clipboardWanted
 	e.clipboard, e.clipboardWanted = "", false
 	return text, wanted
+}
+
+// TakeOpenLinkRequest returns a link requested by gx and clears the request.
+func (e *Editor) TakeOpenLinkRequest() (string, bool) {
+	target, wanted := e.openLink, e.openLinkWanted
+	e.openLink, e.openLinkWanted = "", false
+	return target, wanted
 }
 
 // Message is the last thing the editor wants to tell the user.
@@ -382,8 +391,13 @@ func (e *Editor) insertKey(k Key) {
 		e.backspace()
 		return
 	case "tab":
-		e.cursor = e.buf.Insert(e.cursor, "\t")
-		e.dirty = true
+		if !e.shiftListItem(1) {
+			e.cursor = e.buf.Insert(e.cursor, "\t")
+			e.dirty = true
+		}
+		return
+	case "backtab":
+		e.shiftListItem(-1)
 		return
 	case "up", "down", "left", "right":
 		e.arrow(k.Name)
@@ -409,7 +423,7 @@ func (e *Editor) smartEnter() {
 func (e *Editor) applyInsertEdit(edit insertEdit) {
 	if edit.deleteTo > 0 {
 		e.buf.Delete(Pos{e.cursor.Line, 0}, Pos{e.cursor.Line, edit.deleteTo})
-		e.cursor.Col = 0
+		e.cursor.Col = max(e.cursor.Col-edit.deleteTo, 0)
 	}
 	if edit.insert != "" {
 		e.cursor = e.buf.Insert(e.cursor, edit.insert)
@@ -810,6 +824,9 @@ func (e *Editor) resolveAwait(r rune) {
 				line = min(e.pend.count1-1, e.buf.LineCount()-1)
 			}
 			e.applyMotion(motion{Pos{line, 0}, linewise})
+		case 'x':
+			e.requestLinkUnderCursor()
+			e.pend = pending{}
 		case 'U', 'u', '~':
 			// gU, gu and g~ are operators, so they wait for a motion next.
 			e.pend.op, _ = caseOp(r)
@@ -841,6 +858,18 @@ func (e *Editor) resolveAwait(r rune) {
 
 	e.lastFind = find{kind: await, target: r}
 	e.applyFind(await, r, e.pend.count())
+}
+
+func (e *Editor) requestLinkUnderCursor() {
+	if e.mode != ModeNormal || e.pend.op != 0 {
+		return
+	}
+	link, ok := inlineLinkAt(e.buf.runes(e.cursor.Line), e.cursor.Col)
+	if !ok {
+		e.message = "no link under cursor"
+		return
+	}
+	e.openLink, e.openLinkWanted = link.target, true
 }
 
 // applyFind runs one of f, t, F or T and moves or operates with the result.

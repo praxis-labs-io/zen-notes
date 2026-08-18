@@ -126,6 +126,7 @@ var helpColumns = [2][]helpGroup{
 			{"; ,", "repeat find"},
 			{"/ n N", "search, next, prev"},
 			{"%", "matching bracket"},
+			{"gx", "open Markdown link"},
 			{"H M L", "top, middle, bottom"},
 			{"zt zz zb", "scroll line to"},
 			{"ctrl+d/u", "half page"},
@@ -134,12 +135,11 @@ var helpColumns = [2][]helpGroup{
 	{
 		{"Edit", [][2]string{
 			{"enter backspace", "continue, exit list"},
-			{"d c y", "+ a motion"},
-			{"dd cc yy", "whole line"},
+			{"tab shift+tab", "nest, unnest list"},
+			{"d c y / dd cc yy", "motion / line"},
 			{"iw aw", "word object"},
 			{"i\" i( ip", "quote, paren, para"},
-			{"x D C", "cut, to line end"},
-			{"r s S", "replace, substitute"},
+			{"x D C / r s S", "cut / replace"},
 			{"p P J", "paste, join lines"},
 			{"cmd+c / paste", "system clipboard"},
 			{">> << ~", "indent, toggle case"},

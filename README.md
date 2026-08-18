@@ -61,6 +61,7 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `; ,` | repeat that find, forward and back |
 | `/` | search, `n` and `N` to walk the matches |
 | `%` | matching bracket |
+| `gx` | open the Markdown link under the cursor |
 | `H M L` | top, middle, bottom of the window |
 | `zt zz zb` | scroll the cursor's line to top, centre, bottom |
 | `ctrl+d ctrl+u` | half page |
@@ -70,6 +71,7 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `x X D C Y p P` | edit |
 | `cmd+c`, terminal paste | copy a visual selection, paste the system clipboard |
 | `r s S` | replace a rune, substitute rune or line |
+| `tab shift+tab` in a list | nest or unnest an item and its children |
 | `>> <<`, `>` + motion | indent |
 | `~`, `gU gu g~` + motion | case |
 | `gv` | reselect the last visual range |
@@ -94,8 +96,10 @@ insert, normal or visual mode.
 Insert mode follows the Markdown around the cursor. Enter after a heading leaves
 a blank line for body text. Starting an unordered, ordered or task list leaves
 a blank line after preceding prose, then Enter continues its marker and
-indentation; a checked task continues as an unchecked one. Enter on an empty
-list item, or backspace just after its marker, exits with a blank line below.
+indentation; a checked task continues as an unchecked one. Tab and Shift-Tab
+nest or unnest an item and its children by two spaces, once it has a preceding
+sibling to nest beneath. Enter or Backspace on an empty nested item moves it out
+one level; at the top level, either exits with a blank line below.
 
 Search is incremental: the cursor and the highlight follow along as you type,
 and `esc` puts the cursor back where you started. It matches a plain substring

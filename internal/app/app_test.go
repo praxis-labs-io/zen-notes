@@ -1,7 +1,9 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +54,7 @@ func TestTranslateKey(t *testing.T) {
 		{"enter", tea.KeyPressMsg{Code: tea.KeyEnter}, editor.Named("enter"), true},
 		{"backspace", tea.KeyPressMsg{Code: tea.KeyBackspace}, editor.Named("backspace"), true},
 		{"tab", tea.KeyPressMsg{Code: tea.KeyTab}, editor.Named("tab"), true},
+		{"shift tab", tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, editor.Named("backtab"), true},
 		{"up", tea.KeyPressMsg{Code: tea.KeyUp}, editor.Named("up"), true},
 		{"unknown modifier combo is dropped", tea.KeyPressMsg{Code: 'q', Mod: tea.ModAlt}, editor.Key{}, false},
 		{"unknown ctrl combo is dropped", tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl}, editor.Key{}, false},
@@ -108,6 +111,146 @@ func TestCommandCCopiesAVisualSelection(t *testing.T) {
 	}
 	if m.ed.Text() != "abc" || m.ed.Mode() != editor.ModeNormal {
 		t.Fatalf("Command-C changed text to %q or left mode %v", m.ed.Text(), m.ed.Mode())
+	}
+}
+
+func TestValidWebLink(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		valid  bool
+	}{
+		{"http", "http://example.com", true},
+		{"https", "https://example.com/path?q=1", true},
+		{"case insensitive scheme", "HTTPS://example.com", true},
+		{"mailto", "mailto:hello@example.com", false},
+		{"file", "file:///tmp/note", false},
+		{"relative path", "notes/today.md", false},
+		{"missing host", "https:///path", false},
+		{"malformed", "https://exa mple.com", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validWebLink(tt.target)
+			if (err == nil) != tt.valid {
+				t.Fatalf("validWebLink(%q) error = %v, valid = %v", tt.target, err, tt.valid)
+			}
+		})
+	}
+}
+
+func TestLinkCommandUsesPlatformArgumentVectors(t *testing.T) {
+	const target = "https://example.com/a;touch"
+	tests := []struct {
+		goos string
+		want []string
+	}{
+		{"darwin", []string{"open", target}},
+		{"linux", []string{"xdg-open", target}},
+		{"windows", []string{"rundll32", "url.dll,FileProtocolHandler", target}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			cmd, err := linkCommand(tt.goos, target)
+			if err != nil {
+				t.Fatalf("linkCommand: %v", err)
+			}
+			if !slices.Equal(cmd.Args, tt.want) {
+				t.Fatalf("Args = %q, want %q", cmd.Args, tt.want)
+			}
+		})
+	}
+
+	if _, err := linkCommand("plan9", target); err == nil {
+		t.Fatal("unsupported platform returned no error")
+	}
+}
+
+func TestGXDispatchesLinkToThePlatformOpener(t *testing.T) {
+	m := newTestModel(t, "[link](https://example.com)")
+	var opened string
+	m.openLink = func(target string) error {
+		opened = target
+		return nil
+	}
+
+	if cmd := m.handleKey(keyMsg("g")); cmd != nil {
+		t.Fatal("first g returned a command")
+	}
+	cmd := m.handleKey(keyMsg("x"))
+	if cmd == nil {
+		t.Fatal("gx returned no command")
+	}
+	m.Update(cmd())
+
+	if opened != "https://example.com" {
+		t.Fatalf("opened = %q, want https://example.com", opened)
+	}
+	if m.status != "opened link" {
+		t.Fatalf("status = %q, want opened link", m.status)
+	}
+}
+
+func TestGXRejectsUnsupportedTargetsBeforeLaunching(t *testing.T) {
+	m := newTestModel(t, "[mail](mailto:hello@example.com)")
+	called := false
+	m.openLink = func(string) error {
+		called = true
+		return nil
+	}
+
+	m.handleKey(keyMsg("g"))
+	if cmd := m.handleKey(keyMsg("x")); cmd != nil {
+		t.Fatal("unsupported target returned a command")
+	}
+	if called {
+		t.Fatal("unsupported target reached the platform opener")
+	}
+	if m.status != "not an HTTP or HTTPS link" {
+		t.Fatalf("status = %q, want unsupported-link message", m.status)
+	}
+}
+
+func TestGXReportsPlatformLaunchFailure(t *testing.T) {
+	m := newTestModel(t, "[link](https://example.com)")
+	m.openLink = func(string) error { return errors.New("launcher missing") }
+
+	m.handleKey(keyMsg("g"))
+	cmd := m.handleKey(keyMsg("x"))
+	if cmd == nil {
+		t.Fatal("gx returned no command")
+	}
+	m.Update(cmd())
+
+	if m.status != "open link: launcher missing" {
+		t.Fatalf("status = %q, want launcher failure", m.status)
+	}
+}
+
+func TestGXIgnoresSupersededLaunchResults(t *testing.T) {
+	m := newTestModel(t, "[old](https://old.example) [new](https://new.example)")
+	m.openLink = func(target string) error {
+		if target == "https://old.example" {
+			return errors.New("old failure")
+		}
+		return nil
+	}
+
+	m.handleKey(keyMsg("g"))
+	oldCmd := m.handleKey(keyMsg("x"))
+	m.handleKey(keyMsg("$"))
+	m.handleKey(keyMsg("g"))
+	newCmd := m.handleKey(keyMsg("x"))
+	if oldCmd == nil || newCmd == nil {
+		t.Fatal("gx returned no command")
+	}
+
+	m.Update(newCmd())
+	m.Update(oldCmd())
+	if m.status != "opened link" {
+		t.Fatalf("status = %q, want latest launch result", m.status)
 	}
 }
 
@@ -732,7 +875,7 @@ func TestHelpFitsWithoutClipping(t *testing.T) {
 				t.Errorf("%dx%d: help is missing the %s group", size[0], size[1], group)
 			}
 		}
-		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "cmd+c / paste", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
+		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "cmd+c / paste", "tab shift+tab", "gx", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
 			if !strings.Contains(out, key) {
 				t.Errorf("%dx%d: help is missing %q", size[0], size[1], key)
 			}

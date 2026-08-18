@@ -284,10 +284,190 @@ func TestBackspaceExitingAListLeavesASeparator(t *testing.T) {
 	}
 }
 
+func TestTabNestsListItems(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"unordered", "- one\n- two", "- one\n  - two"},
+		{"ordered", "1. one\n2. two", "1. one\n  2. two"},
+		{"task", "- [ ] one\n- [x] two", "- [ ] one\n  - [x] two"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, "jA<tab><esc>").Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTabMovesTheWholeListSubtree(t *testing.T) {
+	text := "- one\n- two\n  - child\n    - grandchild\n- three"
+	want := "- one\n  - two\n    - child\n      - grandchild\n- three"
+	if got := run(t, text, "jA<tab><esc>").Text(); got != want {
+		t.Fatalf("Text = %q, want %q", got, want)
+	}
+}
+
+func TestListShiftIncludesNonMarkerContent(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{
+			name: "tab moves continuation paragraph and blank line",
+			text: "- one\n- two\n\n  continuation\n- three",
+			keys: "jA<tab><esc>",
+			want: "- one\n  - two\n  \n    continuation\n- three",
+		},
+		{
+			name: "shift tab moves code block and child",
+			text: "- one\n  - two\n\n      code\n    - child\n- three",
+			keys: "jA<backtab><esc>",
+			want: "- one\n- two\n\n    code\n  - child\n- three",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTabFindsSiblingBeforeItsExistingChildren(t *testing.T) {
+	text := "- one\n  - child\n- two"
+	want := "- one\n  - child\n  - two"
+	if got := run(t, text, "GA<tab><esc>").Text(); got != want {
+		t.Fatalf("Text = %q, want %q", got, want)
+	}
+}
+
+func TestTabDoesNotNestAListItemWithoutAPreviousSibling(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+	}{
+		{"first top-level item", "- one", "A<tab><esc>"},
+		{"first child", "- one\n  - child", "jA<tab><esc>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.text {
+				t.Errorf("Text = %q, want unchanged", got)
+			}
+		})
+	}
+}
+
+func TestShiftTabDedentsTheWholeListSubtree(t *testing.T) {
+	text := "- one\n  - child\n    - grandchild\n- two"
+	want := "- one\n- child\n  - grandchild\n- two"
+	if got := run(t, text, "jA<backtab><esc>").Text(); got != want {
+		t.Fatalf("Text = %q, want %q", got, want)
+	}
+}
+
+func TestShiftTabStopsAtTheTopLevel(t *testing.T) {
+	text := "- one\n  - child"
+	if got := run(t, text, "jA<backtab><backtab><esc>").Text(); got != "- one\n- child" {
+		t.Fatalf("Text = %q, want one dedent", got)
+	}
+}
+
+func TestTabRemainsLiteralOutsideAList(t *testing.T) {
+	e := run(t, "body", "A<tab><esc>")
+	if e.Text() != "body\t" {
+		t.Fatalf("Text = %q, want a literal tab", e.Text())
+	}
+
+	e = run(t, "body", "A<backtab><esc>")
+	if e.Text() != "body" {
+		t.Fatalf("Shift-Tab changed non-list text to %q", e.Text())
+	}
+}
+
+func TestEmptyNestedItemDedentsOnEnter(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"unordered", "- parent\n  - ", "- parent\n- "},
+		{"ordered", "1. parent\n  2. ", "1. parent\n2. "},
+		{"task", "- [ ] parent\n  - [ ] ", "- [ ] parent\n- [ ] "},
+		{"one level at a time", "- parent\n    - ", "- parent\n  - "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, "GA<cr><esc>").Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEmptyNestedItemDedentsOnBackspace(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"unordered", "- parent\n  - ", "- parent\n- "},
+		{"ordered", "1. parent\n  2. ", "1. parent\n2. "},
+		{"task", "- [ ] parent\n  - [ ] ", "- [ ] parent\n- [ ] "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, "GA<bs><esc>").Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEmptyNestedItemExitsAfterReachingTopLevel(t *testing.T) {
+	e := run(t, "- parent\n  - ", "GA<cr><cr>body<esc>")
+	if e.Text() != "- parent\n\nbody" {
+		t.Fatalf("Text = %q, want a blank line before body", e.Text())
+	}
+}
+
+func TestListIndentKeepsCursorWithTheContent(t *testing.T) {
+	e := run(t, "- one\n- two", "jA<tab>")
+	if e.Cursor() != (Pos{1, 7}) {
+		t.Fatalf("Cursor = %v, want {1 7}", e.Cursor())
+	}
+
+	e = run(t, "- one\n  - two", "jA<backtab>")
+	if e.Cursor() != (Pos{1, 5}) {
+		t.Fatalf("Cursor = %v, want {1 5}", e.Cursor())
+	}
+}
+
 func TestSmartInsertIsOneUndoChange(t *testing.T) {
 	e := run(t, "", "i- one<cr>two<esc>u")
 	if e.Text() != "" {
 		t.Fatalf("Text after undo = %q, want empty", e.Text())
+	}
+}
+
+func TestListIndentIsPartOfTheInsertUndo(t *testing.T) {
+	text := "- one\n- two\n  - child"
+	e := run(t, text, "jA<tab><esc>u")
+	if e.Text() != text {
+		t.Fatalf("Text after undo = %q, want %q", e.Text(), text)
 	}
 }
 
