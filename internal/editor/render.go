@@ -7,7 +7,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/lucasb-eyer/go-colorful"
-	"github.com/mattn/go-runewidth"
 )
 
 // Styles use ANSI base colors so the note takes on the terminal's own theme
@@ -229,7 +228,7 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 				rowIndent = indent
 			}
 			if i == e.cursor.Line {
-				if r, c := cursorRowCol(runes, starts, e.cursor.Col); r == k {
+				if r, c := cursorRowCol(runes, starts, e.cursor.Col, indent); r == k {
 					cursorRow, cursorCol = len(rows), c+rowIndent
 				}
 			}
@@ -266,11 +265,26 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 	var sb strings.Builder
 	col := row.indent
 	if row.indent > 0 {
-		sb.WriteString(washed(classStyles[tokPlain], bg).Render(strings.Repeat(" ", row.indent)))
+		style := washed(classStyles[tokPlain], bg)
+		at := Pos{row.line, row.start}
+		switch {
+		case e.flash.linewise && e.flashCovers(at):
+			style = e.flashStyle
+		case selLines && e.selected(at, selFrom, selTo, selLines):
+			style = e.selectionStyle()
+		}
+		sb.WriteString(style.Render(strings.Repeat(" ", row.indent)))
 	}
 	for i := row.start; i < row.end && i < len(runes); i++ {
-		w := runewidth.RuneWidth(runes[i])
+		w := runeWidthAt(runes[i], col)
 		if col+w > width {
+			if runes[i] == '\t' {
+				w = width - col
+			} else {
+				break
+			}
+		}
+		if w <= 0 {
 			break
 		}
 		style := washed(classStyles[lineClasses[i]], bg)
@@ -282,7 +296,11 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 		case e.matchCovers(Pos{row.line, i}):
 			style = e.matchStyle
 		}
-		sb.WriteString(style.Render(string(runes[i])))
+		text := string(runes[i])
+		if runes[i] == '\t' {
+			text = strings.Repeat(" ", w)
+		}
+		sb.WriteString(style.Render(text))
 		col += w
 	}
 	return sb.String(), col

@@ -2,6 +2,8 @@ package editor
 
 import "github.com/mattn/go-runewidth"
 
+const tabWidth = 8
+
 // rowStarts gives the rune index each wrapped row of a line begins at, always
 // starting with 0. It breaks after a space where it can, mid-word where it must.
 func rowStarts(runes []rune, width int) []int {
@@ -14,7 +16,7 @@ func indentedRowStarts(runes []rune, width, indent int) []int {
 	if width <= 0 || len(runes) == 0 {
 		return starts
 	}
-	indent = min(max(indent, 0), max(width-1, 0))
+	indent = min(max(indent, 0), max(width-2, 0))
 
 	start := 0
 	for start < len(runes) {
@@ -24,7 +26,7 @@ func indentedRowStarts(runes []rune, width, indent int) []int {
 		}
 		end, w, lastSpace := start, 0, -1
 		for end < len(runes) {
-			rw := runewidth.RuneWidth(runes[end])
+			rw := runeWidthAt(runes[end], width-room+w)
 			if w+rw > room {
 				break
 			}
@@ -59,13 +61,34 @@ func indentedRowStarts(runes []rune, width, indent int) []int {
 // continuationIndent is the display column where wrapped content resumes.
 func continuationIndent(runes []rune, width int) int {
 	contentStart := leadingSpaceEnd(runes)
-	if item, ok := parseListLine(runes); ok {
-		contentStart = item.contentStart
-	} else if quoteStart, ok := quoteContentStart(runes, contentStart); ok {
-		contentStart = quoteStart
+	for contentStart < len(runes) {
+		if quoteStart, ok := quoteContentStart(runes, contentStart); ok {
+			contentStart = quoteStart
+			continue
+		}
+		if item, ok := parseListLine(runes[contentStart:]); ok {
+			contentStart += item.contentStart
+			continue
+		}
+		break
 	}
-	indent := runewidth.StringWidth(string(runes[:contentStart]))
-	return min(indent, max(width-1, 0))
+	indent := displayWidth(runes[:contentStart])
+	return min(indent, max(width-2, 0))
+}
+
+func displayWidth(runes []rune) int {
+	width := 0
+	for _, r := range runes {
+		width += runeWidthAt(r, width)
+	}
+	return width
+}
+
+func runeWidthAt(r rune, col int) int {
+	if r == '\t' {
+		return tabWidth - col%tabWidth
+	}
+	return runewidth.RuneWidth(r)
 }
 
 func leadingSpaceEnd(runes []rune) int {
@@ -91,18 +114,22 @@ func quoteContentStart(runes []rune, at int) (int, bool) {
 
 // cursorRowCol maps a rune index in a line to its wrapped row and the display
 // column within that row.
-func cursorRowCol(runes []rune, starts []int, col int) (int, int) {
+func cursorRowCol(runes []rune, starts []int, col, indent int) (int, int) {
 	row := 0
 	for i, s := range starts {
 		if col >= s {
 			row = i
 		}
 	}
-	width := 0
-	for i := starts[row]; i < col && i < len(runes); i++ {
-		width += runewidth.RuneWidth(runes[i])
+	base := 0
+	if row > 0 {
+		base = indent
 	}
-	return row, width
+	width := base
+	for i := starts[row]; i < col && i < len(runes); i++ {
+		width += runeWidthAt(runes[i], width)
+	}
+	return row, width - base
 }
 
 // scrollTo returns the top row that keeps the cursor row inside a window of

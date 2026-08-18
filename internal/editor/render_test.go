@@ -174,7 +174,7 @@ func TestCursorRowAndColumn(t *testing.T) {
 		{11, 1, 5},
 	}
 	for _, tt := range tests {
-		row, col := cursorRowCol([]rune("hello world"), starts, tt.col)
+		row, col := cursorRowCol([]rune("hello world"), starts, tt.col, 0)
 		if row != tt.wantRow || col != tt.wantCol {
 			t.Errorf("cursorRowCol(%d) = %d, %d; want %d, %d", tt.col, row, col, tt.wantRow, tt.wantCol)
 		}
@@ -183,9 +183,15 @@ func TestCursorRowAndColumn(t *testing.T) {
 
 func TestCursorColumnCountsDisplayWidth(t *testing.T) {
 	runes := []rune("日本x")
-	_, col := cursorRowCol(runes, []int{0}, 2)
+	_, col := cursorRowCol(runes, []int{0}, 2, 0)
 	if col != 4 {
 		t.Fatalf("col = %d, want 4", col)
+	}
+
+	runes = []rune("\talpha")
+	_, col = cursorRowCol(runes, []int{0}, 2, 0)
+	if col != tabWidth+1 {
+		t.Fatalf("tabbed col = %d, want %d", col, tabWidth+1)
 	}
 }
 
@@ -312,6 +318,8 @@ func TestWrappedMarkdownPreservesItsContentIndent(t *testing.T) {
 		{"task list", "- [ ] alpha beta gamma delta", 6},
 		{"blockquote", "  > alpha beta gamma delta", 4},
 		{"nested blockquote", "  > > alpha beta gamma delta", 6},
+		{"blockquote list", "> - alpha beta gamma delta", 4},
+		{"list blockquote", "- > alpha beta gamma delta", 4},
 	}
 
 	for _, tt := range tests {
@@ -327,6 +335,48 @@ func TestWrappedMarkdownPreservesItsContentIndent(t *testing.T) {
 				t.Fatalf("continuation indent = %d, want %d; row %q", got, tt.want, rows[1])
 			}
 		})
+	}
+}
+
+func TestNarrowHangingIndentKeepsWideRunes(t *testing.T) {
+	e := New("- 日本語")
+	got := ansi.Strip(e.Render(GutterWidth(1)+3, 10).Content)
+	for _, r := range "日本語" {
+		if !strings.ContainsRune(got, r) {
+			t.Fatalf("render dropped %q: %q", r, got)
+		}
+	}
+}
+
+func TestWrappedTabIndentUsesTabStops(t *testing.T) {
+	e := New("\talpha beta gamma delta")
+	gw := GutterWidth(1)
+	rows := strings.Split(ansi.Strip(e.Render(gw+14, 10).Content), "\n")
+	if len(rows) < 2 {
+		t.Fatal("line did not wrap")
+	}
+	text := rows[1][gw:]
+	if got := len(text) - len(strings.TrimLeft(text, " ")); got != tabWidth {
+		t.Fatalf("continuation indent = %d, want %d", got, tabWidth)
+	}
+	if strings.ContainsRune(rows[0], '\t') {
+		t.Fatalf("render emitted a literal tab: %q", rows[0])
+	}
+}
+
+func TestWrappedLinewiseSelectionStylesContinuationIndent(t *testing.T) {
+	e := New("- alpha beta gamma delta")
+	e.SetBackground(navy)
+	feed(t, e, "V")
+	rows := renderRows(e, GutterWidth(1)+12, 10)
+	if len(rows) < 2 || !regexp.MustCompile(`48;2;[0-9;]+m {2}`).MatchString(rows[1]) {
+		t.Fatalf("continuation indent is not selected: %q", rows)
+	}
+
+	feed(t, e, "y")
+	rows = renderRows(e, GutterWidth(1)+12, 10)
+	if !regexp.MustCompile(`48;2;[0-9;]+m {2}`).MatchString(rows[1]) {
+		t.Fatalf("continuation indent is not flashed: %q", rows)
 	}
 }
 
