@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -48,6 +49,7 @@ func TestTranslateKey(t *testing.T) {
 		{"space", tea.KeyPressMsg{Text: " ", Code: ' '}, editor.Rune(' '), true},
 		{"ctrl d", tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}, editor.Named("c-d"), true},
 		{"ctrl r", tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}, editor.Named("c-r"), true},
+		{"command c", tea.KeyPressMsg{Code: 'c', Mod: tea.ModSuper}, editor.Named("copy"), true},
 		{"escape", tea.KeyPressMsg{Code: tea.KeyEscape}, editor.Named("esc"), true},
 		{"enter", tea.KeyPressMsg{Code: tea.KeyEnter}, editor.Named("enter"), true},
 		{"backspace", tea.KeyPressMsg{Code: tea.KeyBackspace}, editor.Named("backspace"), true},
@@ -64,6 +66,62 @@ func TestTranslateKey(t *testing.T) {
 				t.Errorf("translateKey = %v, %v; want %v, %v", got, ok, tt.want, tt.ok)
 			}
 		})
+	}
+}
+
+func TestPasteReachesTheBufferInInsertMode(t *testing.T) {
+	m := newTestModel(t, "tail")
+	press(m, "i")
+	_, cmd := m.Update(tea.PasteMsg{Content: "日本\n[link](https://example.com)"})
+
+	if m.ed.Text() != "日本\n[link](https://example.com)tail" {
+		t.Fatalf("Text = %q, want pasted content", m.ed.Text())
+	}
+	if cmd == nil || fmt.Sprint(cmd()) != "日本\n[link](https://example.com)" {
+		t.Fatal("paste did not refresh the system clipboard")
+	}
+}
+
+func TestPasteImportsTheNormalModeRegister(t *testing.T) {
+	m := newTestModel(t, "keep")
+	m.Update(tea.PasteMsg{Content: "X"})
+	if m.ed.Text() != "kXeep" {
+		t.Fatalf("Text = %q, want kXeep", m.ed.Text())
+	}
+	press(m, "p")
+	if m.ed.Text() != "kXXeep" {
+		t.Fatalf("Text after p = %q, want imported register reused", m.ed.Text())
+	}
+}
+
+func TestPasteDoesNotEditBehindHelp(t *testing.T) {
+	m := newTestModel(t, "keep")
+	press(m, "?")
+	m.Update(tea.PasteMsg{Content: "hidden"})
+	press(m, "j")
+
+	if m.ed.Text() != "keep" {
+		t.Fatalf("Text = %q, want unchanged after closing help", m.ed.Text())
+	}
+}
+
+func TestDeleteRequestsSystemClipboardUpdate(t *testing.T) {
+	m := newTestModel(t, "abc")
+	cmd := m.handleKey(keyMsg("x"))
+	if cmd == nil || fmt.Sprint(cmd()) != "a" {
+		t.Fatal("x did not return a clipboard update")
+	}
+}
+
+func TestCommandCCopiesAVisualSelection(t *testing.T) {
+	m := newTestModel(t, "abc")
+	press(m, "v", "l")
+	cmd := m.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModSuper})
+	if cmd == nil {
+		t.Fatal("Command-C returned no clipboard command")
+	}
+	if m.ed.Text() != "abc" || m.ed.Mode() != editor.ModeNormal {
+		t.Fatalf("Command-C changed text to %q or left mode %v", m.ed.Text(), m.ed.Mode())
 	}
 }
 
@@ -828,7 +886,7 @@ func TestHelpFitsWithoutClipping(t *testing.T) {
 				t.Errorf("%dx%d: help is missing the %s group", size[0], size[1], group)
 			}
 		}
-		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "tab shift+tab", "gx", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
+		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "cmd+c / paste", "tab shift+tab", "gx", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
 			if !strings.Contains(out, key) {
 				t.Errorf("%dx%d: help is missing %q", size[0], size[1], key)
 			}

@@ -111,6 +111,56 @@ func (e *Editor) mapRange(from, to Pos, fn func(rune) rune) {
 	}
 }
 
+// pasteVisual replaces the active selection and keeps the change to one undo.
+func (e *Editor) pasteVisual(reg register) {
+	from, to, _ := e.Selection()
+	switch e.mode {
+	case ModeVisualLine:
+		e.snapshot()
+		reg.linewise, reg.block = true, false
+		e.buf.ReplaceLines(from.Line, to.Line+1, strings.Split(reg.text, "\n"))
+		e.setRegister(reg)
+		e.mode = ModeNormal
+		e.cursor = Pos{from.Line, 0}
+		e.clampCursor()
+	case ModeVisualBlock:
+		e.pasteVisualBlock(from, to, reg)
+	default:
+		e.snapshot()
+		if reg.linewise {
+			reg.text += "\n"
+		}
+		reg.linewise, reg.block = false, false
+		e.buf.Delete(from, e.forwardOne(to))
+		end := e.buf.Insert(from, reg.text)
+		e.setRegister(reg)
+		e.mode = ModeNormal
+		e.cursor = Pos{end.Line, max(end.Col-1, 0)}
+		e.clampCursor()
+	}
+}
+
+func (e *Editor) pasteVisualBlock(from, to Pos, reg register) {
+	clipboard := reg
+	reg.linewise, reg.block = false, true
+	parts := strings.Split(reg.text, "\n")
+	height := to.Line - from.Line + 1
+	block := make([]string, height)
+	if len(parts) == 1 {
+		for i := range block {
+			block[i] = reg.text
+		}
+	} else {
+		copy(block, parts)
+	}
+	reg.text = strings.Join(block, "\n")
+
+	e.applyVisual('d')
+	e.reg = reg
+	e.requestClipboard(clipboard)
+	e.putRegister(false, false)
+}
+
 func toggleCase(r rune) rune {
 	if lower := toLower(r); lower != r {
 		return lower
@@ -171,7 +221,7 @@ func (e *Editor) applyBlock(op rune) {
 		end := min(hi+1, len(runes))
 		parts = append(parts, string(runes[start:end]))
 	}
-	e.reg = register{text: strings.Join(parts, "\n"), block: true}
+	e.setRegister(register{text: strings.Join(parts, "\n"), block: true})
 
 	if op == 'y' {
 		e.flashYank(from, to, false, true)

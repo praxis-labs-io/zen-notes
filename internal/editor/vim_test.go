@@ -56,6 +56,144 @@ func TestInsertModeTypesText(t *testing.T) {
 	}
 }
 
+func TestPasteInsertsClipboardTextVerbatim(t *testing.T) {
+	e := New("tail")
+	feed(t, e, "i")
+	e.Paste("日本\n[link](https://example.com)")
+
+	if e.Text() != "日本\n[link](https://example.com)tail" {
+		t.Fatalf("Text = %q, want pasted Unicode and multiple lines", e.Text())
+	}
+	if e.Cursor() != (Pos{1, 27}) {
+		t.Fatalf("Cursor = %v, want {1 27}", e.Cursor())
+	}
+	if !e.Dirty() {
+		t.Fatal("paste left the editor clean")
+	}
+}
+
+func TestPasteImportsTheNormalModeRegister(t *testing.T) {
+	e := New("keep")
+	e.Paste("X")
+	if e.Text() != "kXeep" {
+		t.Fatalf("Text = %q, want kXeep", e.Text())
+	}
+
+	feed(t, e, "p")
+	if e.Text() != "kXXeep" {
+		t.Fatalf("Text after p = %q, want the imported register reused", e.Text())
+	}
+}
+
+func TestNormalPasteRecognizesLinewiseClipboardText(t *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		paste string
+		want  string
+	}{
+		{"text line", "one", "two\n", "one\ntwo"},
+		{"blank line", "one", "\n", "one\n"},
+		{"text into empty note", "", "one\n", "one"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			e.Paste(tt.paste)
+			if e.Text() != tt.want {
+				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
+			}
+		})
+	}
+}
+
+func TestPasteReplacesVisualSelections(t *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		keys  string
+		paste string
+		want  string
+	}{
+		{"characters", "abcd", "vl", "X", "Xcd"},
+		{"characters preserve trailing newline", "abcd", "vl", "X\n", "X\ncd"},
+		{"lines", "one\ntwo\nthree", "Vj", "new", "new\nthree"},
+		{"all lines", "one\ntwo", "Vj", "new", "new"},
+		{"block", "ab\nab", "<c-v>j", "X", "Xb\nXb"},
+		{"multiline block", "ab\nab\nab", "<c-v>j", "X\nY\nZ", "Xb\nYb\nab"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			feed(t, e, tt.keys)
+			e.Paste(tt.paste)
+			if e.Text() != tt.want {
+				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
+			}
+			feed(t, e, "u")
+			if e.Text() != tt.text {
+				t.Fatalf("Text after undo = %q, want %q", e.Text(), tt.text)
+			}
+		})
+	}
+}
+
+func TestVisualBlockPasteIsOneUndoAtUndoLimit(t *testing.T) {
+	e := New("ab\nab")
+	feed(t, e, strings.Repeat("~h", undoDepth))
+	feed(t, e, "<c-v>j")
+	e.Paste("X")
+	feed(t, e, "u")
+
+	if e.Text() != "ab\nab" {
+		t.Fatalf("Text after undo = %q, want original block", e.Text())
+	}
+}
+
+func TestVisualBlockPastePreservesSystemClipboard(t *testing.T) {
+	tests := []struct {
+		name  string
+		paste string
+		want  string
+	}{
+		{"single row expanded", "X", "X"},
+		{"excess rows truncated", "X\nY\nZ", "X\nY\nZ"},
+		{"blank line", "\n", "\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New("ab\nab")
+			feed(t, e, "<c-v>j")
+			e.Paste(tt.paste)
+			got, ok := e.TakeClipboardRequest()
+			if !ok || got != tt.want {
+				t.Fatalf("clipboard request = %q, %v, want %q", got, ok, tt.want)
+			}
+		})
+	}
+}
+
+func TestPasteIsIgnoredInCommandMode(t *testing.T) {
+	e := run(t, "keep", ":")
+	e.Paste("q")
+	if e.Text() != "keep" || e.CommandLine() != ":" {
+		t.Fatalf("paste changed command mode: text %q, command %q", e.Text(), e.CommandLine())
+	}
+}
+
+func TestPasteIsPartOfTheInsertUndo(t *testing.T) {
+	e := New("")
+	feed(t, e, "i")
+	e.Paste("pasted")
+	feed(t, e, "<esc>u")
+	if e.Text() != "" {
+		t.Fatalf("Text after undo = %q, want empty", e.Text())
+	}
+}
+
 func TestEscapeStepsCursorBack(t *testing.T) {
 	e := run(t, "", "iab<esc>")
 	if e.Cursor() != (Pos{0, 1}) {
@@ -636,6 +774,56 @@ func TestYankAndPut(t *testing.T) {
 				t.Errorf("Text = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRegisterChangesRequestSystemClipboardSync(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"character yank", "foo bar", "yiw", "foo"},
+		{"line yank", "one\ntwo", "yy", "one\n"},
+		{"blank line yank", "\nnext", "yy", "\n"},
+		{"delete", "foo bar", "dw", "foo "},
+		{"change", "foo bar", "cw", "foo"},
+		{"substitute", "abc", "s", "a"},
+		{"x", "abc", "x", "a"},
+		{"visual yank", "abc", "vly", "ab"},
+		{"visual block delete", "ab\nab", "<c-v>jd", "a\na"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, tt.keys)
+			got, ok := e.TakeClipboardRequest()
+			if !ok || got != tt.want {
+				t.Fatalf("clipboard request = %q, %v, want %q", got, ok, tt.want)
+			}
+			if second, ok := e.TakeClipboardRequest(); ok {
+				t.Fatalf("second clipboard request = %q, true, want cleared", second)
+			}
+		})
+	}
+}
+
+func TestCopyKeyYanksAVisualSelection(t *testing.T) {
+	e := run(t, "abc", "vl<copy>")
+	if e.Text() != "abc" || e.Mode() != ModeNormal {
+		t.Fatalf("copy changed text to %q or left mode %v", e.Text(), e.Mode())
+	}
+	text, ok := e.TakeClipboardRequest()
+	if !ok || text != "ab" {
+		t.Fatalf("clipboard request = %q, %v, want ab", text, ok)
+	}
+}
+
+func TestCopyKeyDoesNothingWithoutAVisualSelection(t *testing.T) {
+	e := run(t, "abc", "<copy>")
+	if text, ok := e.TakeClipboardRequest(); ok {
+		t.Fatalf("unexpected clipboard request %q", text)
 	}
 }
 
