@@ -355,6 +355,9 @@ func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
 	case tea.KeyBackspace:
 		return editor.Named("backspace"), true
 	case tea.KeyTab:
+		if msg.Mod&tea.ModShift != 0 {
+			return editor.Named("backtab"), true
+		}
 		return editor.Named("tab"), true
 	case tea.KeyUp:
 		return editor.Named("up"), true

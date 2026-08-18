@@ -134,6 +134,7 @@ var helpColumns = [2][]helpGroup{
 	{
 		{"Edit", [][2]string{
 			{"enter backspace", "continue, exit list"},
+			{"tab shift+tab", "nest, unnest list"},
 			{"d c y", "+ a motion"},
 			{"dd cc yy", "whole line"},
 			{"iw aw", "word object"},
