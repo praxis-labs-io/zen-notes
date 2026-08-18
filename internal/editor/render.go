@@ -7,7 +7,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/lucasb-eyer/go-colorful"
-	"github.com/mattn/go-runewidth"
 )
 
 // Styles use ANSI base colors so the note takes on the terminal's own theme
@@ -173,6 +172,7 @@ type Rendered struct {
 type vrow struct {
 	line       int
 	start, end int
+	indent     int
 }
 
 // Render draws height rows of the buffer, scrolling to keep the caret in
@@ -216,18 +216,23 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 
 	for i := range e.buf.LineCount() {
 		runes := e.buf.runes(i)
-		starts := rowStarts(runes, width)
+		indent := continuationIndent(runes, width)
+		starts := indentedRowStarts(runes, width, indent)
 		for k, s := range starts {
 			end := len(runes)
 			if k+1 < len(starts) {
 				end = starts[k+1]
 			}
+			rowIndent := 0
+			if k > 0 {
+				rowIndent = indent
+			}
 			if i == e.cursor.Line {
-				if r, c := cursorRowCol(runes, starts, e.cursor.Col); r == k {
-					cursorRow, cursorCol = len(rows), c
+				if r, c := cursorRowCol(runes, starts, e.cursor.Col, indent); r == k {
+					cursorRow, cursorCol = len(rows), c+rowIndent
 				}
 			}
-			rows = append(rows, vrow{line: i, start: s, end: end})
+			rows = append(rows, vrow{line: i, start: s, end: end, indent: rowIndent})
 		}
 	}
 	return rows, cursorRow, cursorCol
@@ -258,10 +263,28 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 	selFrom, selTo, selLines := e.Selection()
 
 	var sb strings.Builder
-	col := 0
+	col := row.indent
+	if row.indent > 0 {
+		style := washed(classStyles[tokPlain], bg)
+		at := Pos{row.line, row.start}
+		switch {
+		case e.flash.linewise && e.flashCovers(at):
+			style = e.flashStyle
+		case selLines && e.selected(at, selFrom, selTo, selLines):
+			style = e.selectionStyle()
+		}
+		sb.WriteString(style.Render(strings.Repeat(" ", row.indent)))
+	}
 	for i := row.start; i < row.end && i < len(runes); i++ {
-		w := runewidth.RuneWidth(runes[i])
+		w := runeWidthAt(runes[i], col)
 		if col+w > width {
+			if runes[i] == '\t' {
+				w = width - col
+			} else {
+				break
+			}
+		}
+		if w <= 0 {
 			break
 		}
 		style := washed(classStyles[lineClasses[i]], bg)
@@ -273,7 +296,11 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 		case e.matchCovers(Pos{row.line, i}):
 			style = e.matchStyle
 		}
-		sb.WriteString(style.Render(string(runes[i])))
+		text := string(runes[i])
+		if runes[i] == '\t' {
+			text = strings.Repeat(" ", w)
+		}
+		sb.WriteString(style.Render(text))
 		col += w
 	}
 	return sb.String(), col
