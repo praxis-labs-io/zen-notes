@@ -61,6 +61,7 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `; ,` | repeat that find, forward and back |
 | `/` | search, `n` and `N` to walk the matches |
 | `%` | matching bracket |
+| `gx` | open the Markdown link under the cursor |
 | `H M L` | top, middle, bottom of the window |
 | `zt zz zb` | scroll the cursor's line to top, centre, bottom |
 | `ctrl+d ctrl+u` | half page |
