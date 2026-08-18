@@ -143,6 +143,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reload(string(msg))
 		return m, waitForChange(m.watch)
 
+	case tea.PasteMsg:
+		m.clearStatus()
+		m.ed.Paste(msg.Content)
+		return m, m.takeClipboardCmd()
+
 	case tea.KeyPressMsg:
 		return m, m.handleKey(msg)
 	}
@@ -171,6 +176,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.setStatus(msg)
 		m.ed.ClearMessage()
 	}
+	clipboardCmd := m.takeClipboardCmd()
 	if m.ed.TakeSaveRequest() {
 		m.save()
 	}
@@ -178,9 +184,21 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.quit()
 	}
 	if m.ed.YankFlash() {
-		return tea.Tick(flashDuration, func(time.Time) tea.Msg { return yankFlashDoneMsg{} })
+		flashCmd := tea.Tick(flashDuration, func(time.Time) tea.Msg { return yankFlashDoneMsg{} })
+		if clipboardCmd != nil {
+			return tea.Batch(clipboardCmd, flashCmd)
+		}
+		return flashCmd
 	}
-	return nil
+	return clipboardCmd
+}
+
+func (m *Model) takeClipboardCmd() tea.Cmd {
+	text, wanted := m.ed.TakeClipboardRequest()
+	if !wanted {
+		return nil
+	}
+	return tea.SetClipboard(text)
 }
 
 // browseKey handles the day navigation keys, reporting whether it took the
@@ -335,6 +353,9 @@ func (m *Model) quit() tea.Cmd {
 // translateKey converts a Bubble Tea keystroke into an editor key, reporting
 // false for combinations the editor has no use for.
 func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
+	if msg.Mod == tea.ModSuper && msg.Code == 'c' {
+		return editor.Named("copy"), true
+	}
 	if msg.Mod&tea.ModCtrl != 0 {
 		switch msg.Code {
 		case 'd', 'u', 'r', 'v':

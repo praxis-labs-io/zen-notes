@@ -68,6 +68,7 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `d c y` + motion, `dd cc yy` | operators |
 | `iw aw i" a( ip` | text objects, as in `ciw` |
 | `x X D C Y p P` | edit |
+| `cmd+c`, terminal paste | copy a visual selection, paste the system clipboard |
 | `r s S` | replace a rune, substitute rune or line |
 | `>> <<`, `>` + motion | indent |
 | `~`, `gU gu g~` + motion | case |
@@ -83,6 +84,12 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `:q` `:w` `:wq`, `ZZ`, `ctrl+c` | quit and save |
 
 Counts work: `3j`, `d2w`, `2dd`.
+
+The Vim register and system clipboard move together. Yanks, deletes, changes
+and substitutes update both. `p` and `P` reuse that register. Cmd+C copies an
+active visual selection when the terminal forwards Command keys. The terminal's
+paste shortcut imports external clipboard text, then pastes it in the active
+insert, normal or visual mode.
 
 Insert mode follows the Markdown around the cursor. Enter after a heading leaves
 a blank line for body text. Starting an unordered, ordered or task list leaves

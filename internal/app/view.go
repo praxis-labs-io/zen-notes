@@ -141,6 +141,7 @@ var helpColumns = [2][]helpGroup{
 			{"x D C", "cut, to line end"},
 			{"r s S", "replace, substitute"},
 			{"p P J", "paste, join lines"},
+			{"cmd+c / paste", "system clipboard"},
 			{">> << ~", "indent, toggle case"},
 			{"gU gu g~", "+ a motion"},
 			{"gv", "reselect"},
