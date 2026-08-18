@@ -223,7 +223,7 @@ func (e *Editor) listSubtreeEnd(indent int) int {
 	end := e.cursor.Line
 	for line := e.cursor.Line + 1; line < e.buf.LineCount(); line++ {
 		item, ok := parseListLine(e.buf.runes(line))
-		if !ok || item.indent <= indent {
+		if ok && item.indent <= indent {
 			break
 		}
 		end = line

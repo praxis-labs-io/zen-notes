@@ -226,6 +226,36 @@ func TestTabMovesTheWholeListSubtree(t *testing.T) {
 	}
 }
 
+func TestListShiftIncludesNonMarkerContent(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{
+			name: "tab moves continuation paragraph and blank line",
+			text: "- one\n- two\n\n  continuation\n- three",
+			keys: "jA<tab><esc>",
+			want: "- one\n  - two\n  \n    continuation\n- three",
+		},
+		{
+			name: "shift tab moves code block and child",
+			text: "- one\n  - two\n\n      code\n    - child\n- three",
+			keys: "jA<backtab><esc>",
+			want: "- one\n- two\n\n    code\n  - child\n- three",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTabFindsSiblingBeforeItsExistingChildren(t *testing.T) {
 	text := "- one\n  - child\n- two"
 	want := "- one\n  - child\n  - two"
