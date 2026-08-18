@@ -52,6 +52,7 @@ func TestTranslateKey(t *testing.T) {
 		{"enter", tea.KeyPressMsg{Code: tea.KeyEnter}, editor.Named("enter"), true},
 		{"backspace", tea.KeyPressMsg{Code: tea.KeyBackspace}, editor.Named("backspace"), true},
 		{"tab", tea.KeyPressMsg{Code: tea.KeyTab}, editor.Named("tab"), true},
+		{"shift tab", tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, editor.Named("backtab"), true},
 		{"up", tea.KeyPressMsg{Code: tea.KeyUp}, editor.Named("up"), true},
 		{"unknown modifier combo is dropped", tea.KeyPressMsg{Code: 'q', Mod: tea.ModAlt}, editor.Key{}, false},
 		{"unknown ctrl combo is dropped", tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl}, editor.Key{}, false},
@@ -827,7 +828,7 @@ func TestHelpFitsWithoutClipping(t *testing.T) {
 				t.Errorf("%dx%d: help is missing the %s group", size[0], size[1], group)
 			}
 		}
-		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "gx", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
+		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "tab shift+tab", "gx", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
 			if !strings.Contains(out, key) {
 				t.Errorf("%dx%d: help is missing %q", size[0], size[1], key)
 			}

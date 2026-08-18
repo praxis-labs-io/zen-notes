@@ -343,8 +343,13 @@ func (e *Editor) insertKey(k Key) {
 		e.backspace()
 		return
 	case "tab":
-		e.cursor = e.buf.Insert(e.cursor, "\t")
-		e.dirty = true
+		if !e.shiftListItem(1) {
+			e.cursor = e.buf.Insert(e.cursor, "\t")
+			e.dirty = true
+		}
+		return
+	case "backtab":
+		e.shiftListItem(-1)
 		return
 	case "up", "down", "left", "right":
 		e.arrow(k.Name)
@@ -370,7 +375,7 @@ func (e *Editor) smartEnter() {
 func (e *Editor) applyInsertEdit(edit insertEdit) {
 	if edit.deleteTo > 0 {
 		e.buf.Delete(Pos{e.cursor.Line, 0}, Pos{e.cursor.Line, edit.deleteTo})
-		e.cursor.Col = 0
+		e.cursor.Col = max(e.cursor.Col-edit.deleteTo, 0)
 	}
 	if edit.insert != "" {
 		e.cursor = e.buf.Insert(e.cursor, edit.insert)

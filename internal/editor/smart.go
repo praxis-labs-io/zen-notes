@@ -12,6 +12,7 @@ type insertEdit struct {
 }
 
 type listLine struct {
+	indent       int
 	contentStart int
 	nextPrefix   string
 }
@@ -21,6 +22,9 @@ func enterEdit(line []rune, col int, afterList bool) insertEdit {
 	item, isList := parseListLine(line)
 	if isList && col >= item.contentStart {
 		if onlySpace(line[item.contentStart:]) {
+			if item.indent > 0 {
+				return insertEdit{deleteTo: min(item.indent, len([]rune(indentUnit)))}
+			}
 			return exitListEdit(item.contentStart, afterList)
 		}
 		return insertEdit{insert: "\n" + item.nextPrefix}
@@ -36,6 +40,9 @@ func backspaceEdit(line []rune, col int, afterList bool) (insertEdit, bool) {
 	item, isList := parseListLine(line)
 	if !isList || col != item.contentStart || !onlySpace(line[item.contentStart:]) {
 		return insertEdit{}, false
+	}
+	if item.indent > 0 {
+		return insertEdit{deleteTo: min(item.indent, len([]rune(indentUnit)))}, true
 	}
 	return exitListEdit(item.contentStart, afterList), true
 }
@@ -85,14 +92,14 @@ func parseBulletList(line []rune, markerAt int, indent string) (listLine, bool) 
 
 	prefix := indent + string(line[markerAt]) + " "
 	if !hasTaskMarker(line, contentStart) {
-		return listLine{contentStart: contentStart, nextPrefix: prefix}, true
+		return listLine{indent: markerAt, contentStart: contentStart, nextPrefix: prefix}, true
 	}
 
 	contentStart, ok = skipRequiredSpace(line, contentStart+3)
 	if !ok {
 		return listLine{}, false
 	}
-	return listLine{contentStart: contentStart, nextPrefix: prefix + "[ ] "}, true
+	return listLine{indent: markerAt, contentStart: contentStart, nextPrefix: prefix + "[ ] "}, true
 }
 
 func parseOrderedList(line []rune, numberAt int, indent string) (listLine, bool) {
@@ -114,7 +121,7 @@ func parseOrderedList(line []rune, numberAt int, indent string) (listLine, bool)
 	}
 
 	prefix := indent + strconv.Itoa(n+1) + string(line[delimiterAt]) + " "
-	return listLine{contentStart: contentStart, nextPrefix: prefix}, true
+	return listLine{indent: numberAt, contentStart: contentStart, nextPrefix: prefix}, true
 }
 
 func skipRequiredSpace(line []rune, at int) (int, bool) {
@@ -150,4 +157,76 @@ func isHeading(line []rune) bool {
 
 func onlySpace(runes []rune) bool {
 	return strings.TrimSpace(string(runes)) == ""
+}
+
+// shiftListItem moves the current list item and its descendants by one level.
+// It reports whether the line was a list item, even when the shift is invalid.
+func (e *Editor) shiftListItem(dir int) bool {
+	item, ok := parseListLine(e.buf.runes(e.cursor.Line))
+	if !ok {
+		return false
+	}
+	if dir > 0 && !e.hasPreviousListSibling(item.indent) {
+		return true
+	}
+	if dir < 0 && item.indent == 0 {
+		return true
+	}
+
+	to := e.listSubtreeEnd(item.indent)
+	cursorShift := 0
+	changed := false
+	for line := e.cursor.Line; line <= to; line++ {
+		text := e.buf.Line(line)
+		if dir > 0 {
+			e.buf.ReplaceLines(line, line+1, []string{indentUnit + text})
+			if line == e.cursor.Line {
+				cursorShift = len([]rune(indentUnit))
+			}
+			changed = true
+			continue
+		}
+
+		trimmed := trimIndent(text)
+		if trimmed == text {
+			continue
+		}
+		e.buf.ReplaceLines(line, line+1, []string{trimmed})
+		if line == e.cursor.Line {
+			cursorShift = -(len([]rune(text)) - len([]rune(trimmed)))
+		}
+		changed = true
+	}
+	if changed {
+		e.cursor.Col = max(e.cursor.Col+cursorShift, 0)
+		e.dirty = true
+	}
+	return true
+}
+
+// hasPreviousListSibling rejects indentation without an item to become the
+// parent. Descendants of a previous sibling are skipped while walking back.
+func (e *Editor) hasPreviousListSibling(indent int) bool {
+	for line := e.cursor.Line - 1; line >= 0; line-- {
+		item, ok := parseListLine(e.buf.runes(line))
+		if !ok || item.indent < indent {
+			return false
+		}
+		if item.indent == indent {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Editor) listSubtreeEnd(indent int) int {
+	end := e.cursor.Line
+	for line := e.cursor.Line + 1; line < e.buf.LineCount(); line++ {
+		item, ok := parseListLine(e.buf.runes(line))
+		if ok && item.indent <= indent {
+			break
+		}
+		end = line
+	}
+	return end
 }
