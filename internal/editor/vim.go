@@ -328,8 +328,7 @@ func (e *Editor) insertKey(k Key) {
 		e.clampCursor()
 		return
 	case "enter", "cr":
-		e.cursor = e.buf.Insert(e.cursor, "\n")
-		e.dirty = true
+		e.smartEnter()
 		return
 	case "backspace", "bs":
 		e.backspace()
@@ -349,10 +348,50 @@ func (e *Editor) insertKey(k Key) {
 		return
 	}
 	e.cursor = e.buf.Insert(e.cursor, string(k.R))
+	e.separateNewList()
 	e.dirty = true
 }
 
+func (e *Editor) smartEnter() {
+	edit := enterEdit(e.buf.runes(e.cursor.Line), e.cursor.Col, e.previousLineIsList())
+	e.applyInsertEdit(edit)
+	e.dirty = true
+}
+
+func (e *Editor) applyInsertEdit(edit insertEdit) {
+	if edit.deleteTo > 0 {
+		e.buf.Delete(Pos{e.cursor.Line, 0}, Pos{e.cursor.Line, edit.deleteTo})
+		e.cursor.Col = 0
+	}
+	if edit.insert != "" {
+		e.cursor = e.buf.Insert(e.cursor, edit.insert)
+	}
+}
+
+func (e *Editor) previousLineIsList() bool {
+	if e.cursor.Line == 0 {
+		return false
+	}
+	line := e.buf.runes(e.cursor.Line - 1)
+	item, ok := parseListLine(line)
+	return ok && !onlySpace(line[item.contentStart:])
+}
+
+func (e *Editor) separateNewList() {
+	if e.cursor.Line == 0 || !needsListSeparator(e.buf.runes(e.cursor.Line), e.buf.runes(e.cursor.Line-1)) {
+		return
+	}
+	col := e.cursor.Col
+	e.buf.Insert(Pos{e.cursor.Line, 0}, "\n")
+	e.cursor = Pos{e.cursor.Line + 1, col}
+}
+
 func (e *Editor) backspace() {
+	if edit, ok := backspaceEdit(e.buf.runes(e.cursor.Line), e.cursor.Col, e.previousLineIsList()); ok {
+		e.applyInsertEdit(edit)
+		e.dirty = true
+		return
+	}
 	if e.cursor.Col > 0 {
 		e.buf.Delete(Pos{e.cursor.Line, e.cursor.Col - 1}, e.cursor)
 		e.cursor.Col--

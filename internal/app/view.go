@@ -133,14 +133,14 @@ var helpColumns = [2][]helpGroup{
 	},
 	{
 		{"Edit", [][2]string{
+			{"enter backspace", "continue, exit list"},
 			{"d c y", "+ a motion"},
 			{"dd cc yy", "whole line"},
 			{"iw aw", "word object"},
 			{"i\" i( ip", "quote, paren, para"},
 			{"x D C", "cut, to line end"},
 			{"r s S", "replace, substitute"},
-			{"p P", "paste"},
-			{"J", "join lines"},
+			{"p P J", "paste, join lines"},
 			{">> << ~", "indent, toggle case"},
 			{"gU gu g~", "+ a motion"},
 			{"gv", "reselect"},

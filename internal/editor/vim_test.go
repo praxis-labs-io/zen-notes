@@ -100,6 +100,111 @@ func TestEnterSplitsLineInInsertMode(t *testing.T) {
 	}
 }
 
+func TestSmartEnterUsesMarkdownContext(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"heading leaves a blank line", "", "i# Heading<cr>Body<esc>", "# Heading\n\nBody"},
+		{"empty heading splits normally", "", "i# <cr>Body<esc>", "# \nBody"},
+		{"ordinary prose splits normally", "", "iOne<cr>Two<esc>", "One\nTwo"},
+		{"dash list continues", "", "i- one<cr>two<esc>", "- one\n- two"},
+		{"asterisk list continues", "", "i* one<cr>two<esc>", "* one\n* two"},
+		{"plus list continues", "", "i+ one<cr>two<esc>", "+ one\n+ two"},
+		{"ordered list increments", "", "i9. one<cr>two<esc>", "9. one\n10. two"},
+		{"parenthesized list increments", "", "i2) one<cr>two<esc>", "2) one\n3) two"},
+		{"task list resets", "", "i- [x] done<cr>next<esc>", "- [x] done\n- [ ] next"},
+		{"indentation is preserved", "  - one", "A<cr>two<esc>", "  - one\n  - two"},
+		{"unicode content continues", "", "i- 日本語<cr>続き<esc>", "- 日本語\n- 続き"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStartingAListSeparatesItFromProse(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want string
+	}{
+		{"adds a missing separator", "Prose\n", "Gi- item<esc>", "Prose\n\n- item"},
+		{"keeps an existing separator", "Prose\n\n", "Gi- item<esc>", "Prose\n\n- item"},
+		{"separates an ordered list", "Prose\n", "Gi1. item<esc>", "Prose\n\n1. item"},
+		{"separates a task list", "Prose\n", "Gi- [ ] item<esc>", "Prose\n\n- [ ] item"},
+		{"keeps adjacent list items together", "- one\n", "Gi- two<esc>", "- one\n- two"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEnterOnEmptyListItemExitsTheList(t *testing.T) {
+	tests := []struct {
+		name string
+		keys string
+		want string
+	}{
+		{"unordered", "i- one<cr><cr>body<esc>", "- one\n\nbody"},
+		{"ordered", "i1. one<cr><cr>body<esc>", "1. one\n\nbody"},
+		{"task", "i- [ ] one<cr><cr>body<esc>", "- [ ] one\n\nbody"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, "", tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBackspaceAfterEmptyListMarkerExitsTheList(t *testing.T) {
+	tests := []struct {
+		name string
+		keys string
+	}{
+		{"unordered", "i- <bs>body<esc>"},
+		{"ordered", "i1. <bs>body<esc>"},
+		{"task", "i- [ ] <bs>body<esc>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, "", tt.keys).Text(); got != "body" {
+				t.Errorf("Text = %q, want body", got)
+			}
+		})
+	}
+}
+
+func TestBackspaceExitingAListLeavesASeparator(t *testing.T) {
+	e := run(t, "- one\n- ", "GA<bs>body<esc>")
+	if e.Text() != "- one\n\nbody" {
+		t.Fatalf("Text = %q, want a blank line before body", e.Text())
+	}
+}
+
+func TestSmartInsertIsOneUndoChange(t *testing.T) {
+	e := run(t, "", "i- one<cr>two<esc>u")
+	if e.Text() != "" {
+		t.Fatalf("Text after undo = %q, want empty", e.Text())
+	}
+}
+
 func TestBackspaceInInsertMode(t *testing.T) {
 	e := run(t, "", "iabc<bs><esc>")
 	if e.Text() != "ab" {
