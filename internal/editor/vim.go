@@ -164,6 +164,8 @@ type Editor struct {
 	flash          flashRange
 	quit           bool
 	saveWanted     bool
+	openLink       string
+	openLinkWanted bool
 }
 
 const undoDepth = 200
@@ -223,6 +225,13 @@ func (e *Editor) TakeSaveRequest() bool {
 	want := e.saveWanted
 	e.saveWanted = false
 	return want
+}
+
+// TakeOpenLinkRequest returns a link requested by gx and clears the request.
+func (e *Editor) TakeOpenLinkRequest() (string, bool) {
+	target, wanted := e.openLink, e.openLinkWanted
+	e.openLink, e.openLinkWanted = "", false
+	return target, wanted
 }
 
 // Message is the last thing the editor wants to tell the user.
@@ -758,6 +767,9 @@ func (e *Editor) resolveAwait(r rune) {
 				line = min(e.pend.count1-1, e.buf.LineCount()-1)
 			}
 			e.applyMotion(motion{Pos{line, 0}, linewise})
+		case 'x':
+			e.requestLinkUnderCursor()
+			e.pend = pending{}
 		case 'U', 'u', '~':
 			// gU, gu and g~ are operators, so they wait for a motion next.
 			e.pend.op, _ = caseOp(r)
@@ -789,6 +801,18 @@ func (e *Editor) resolveAwait(r rune) {
 
 	e.lastFind = find{kind: await, target: r}
 	e.applyFind(await, r, e.pend.count())
+}
+
+func (e *Editor) requestLinkUnderCursor() {
+	if e.mode != ModeNormal || e.pend.op != 0 {
+		return
+	}
+	link, ok := inlineLinkAt(e.buf.runes(e.cursor.Line), e.cursor.Col)
+	if !ok {
+		e.message = "no link under cursor"
+		return
+	}
+	e.openLink, e.openLinkWanted = link.target, true
 }
 
 // applyFind runs one of f, t, F or T and moves or operates with the result.

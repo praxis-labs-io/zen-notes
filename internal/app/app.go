@@ -33,6 +33,15 @@ type fileChangedMsg string
 // yankFlashDoneMsg puts out the highlight over a yank.
 type yankFlashDoneMsg struct{}
 
+// linkOpenedMsg reports that the operating system accepted a link.
+type linkOpenedMsg struct{ request int }
+
+// linkOpenFailedMsg reports that the operating system rejected a link.
+type linkOpenFailedMsg struct {
+	request int
+	err     error
+}
+
 // reloadDecision is what to do about a note changing underneath us.
 type reloadDecision int
 
@@ -69,6 +78,8 @@ type Model struct {
 
 	width, height int
 	now           func() note.Day
+	openLink      func(string) error
+	linkRequest   int
 }
 
 // NewModel opens today's note. The watcher may be nil, in which case the note
@@ -89,6 +100,7 @@ func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 		width:       80,
 		height:      24,
 		now:         note.Today,
+		openLink:    systemOpenLink,
 	}, nil
 }
 
@@ -126,6 +138,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case yankFlashDoneMsg:
 		m.ed.ClearYankFlash()
+		return m, nil
+
+	case linkOpenedMsg:
+		if msg.request == m.linkRequest {
+			m.setStatus("opened link")
+		}
+		return m, nil
+
+	case linkOpenFailedMsg:
+		if msg.request == m.linkRequest {
+			m.setStatus("open link: " + msg.err.Error())
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -171,6 +195,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.setStatus(msg)
 		m.ed.ClearMessage()
 	}
+	if target, wanted := m.ed.TakeOpenLinkRequest(); wanted {
+		return m.openLinkCmd(target)
+	}
 	if m.ed.TakeSaveRequest() {
 		m.save()
 	}
@@ -181,6 +208,21 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return tea.Tick(flashDuration, func(time.Time) tea.Msg { return yankFlashDoneMsg{} })
 	}
 	return nil
+}
+
+func (m *Model) openLinkCmd(target string) tea.Cmd {
+	m.linkRequest++
+	request := m.linkRequest
+	if err := validWebLink(target); err != nil {
+		m.setStatus(err.Error())
+		return nil
+	}
+	return func() tea.Msg {
+		if err := m.openLink(target); err != nil {
+			return linkOpenFailedMsg{request: request, err: err}
+		}
+		return linkOpenedMsg{request: request}
+	}
 }
 
 // browseKey handles the day navigation keys, reporting whether it took the
