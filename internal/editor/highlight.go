@@ -24,7 +24,6 @@ var (
 	quoteRe    = regexp.MustCompile(`^(\s*)(>+)(\s)`)
 	fenceRe    = regexp.MustCompile("^\\s*(```|~~~)")
 	checkboxRe = regexp.MustCompile(`^\[( |x|X)\]`)
-	linkRe     = regexp.MustCompile(`\[[^\]\n]*\]\([^)\n]*\)`)
 	strongRe   = regexp.MustCompile(`\*\*[^*\n]+\*\*|__[^_\n]+__`)
 	emphasisRe = regexp.MustCompile(`\*[^*\n]+\*|_[^_\n]+_`)
 	codeRe     = regexp.MustCompile("`[^`\n]*`")
@@ -35,7 +34,6 @@ var inlinePatterns = []struct {
 	re    *regexp.Regexp
 	class tokenClass
 }{
-	{linkRe, tokLink},
 	{codeRe, tokCode},
 	{strongRe, tokStrong},
 	{emphasisRe, tokEmphasis},
@@ -111,6 +109,11 @@ func markLinePrefix(runes []rune, classes []tokenClass) int {
 // markInline styles each pattern over only the still-plain runs, so a star
 // left over from a bold span cannot pair with a later one across it.
 func markInline(runes []rune, classes []tokenClass, from int) {
+	for _, link := range inlineLinks(runes) {
+		if link.from >= from {
+			fill(classes, link.from, link.to, tokLink)
+		}
+	}
 	for _, p := range inlinePatterns {
 		for _, seg := range plainRuns(classes, from) {
 			text := string(runes[seg[0]:seg[1]])

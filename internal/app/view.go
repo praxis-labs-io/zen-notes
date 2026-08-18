@@ -126,6 +126,7 @@ var helpColumns = [2][]helpGroup{
 			{"; ,", "repeat find"},
 			{"/ n N", "search, next, prev"},
 			{"%", "matching bracket"},
+			{"gx", "open Markdown link"},
 			{"H M L", "top, middle, bottom"},
 			{"zt zz zb", "scroll line to"},
 			{"ctrl+d/u", "half page"},

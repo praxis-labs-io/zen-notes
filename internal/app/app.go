@@ -33,6 +33,9 @@ type fileChangedMsg string
 // yankFlashDoneMsg puts out the highlight over a yank.
 type yankFlashDoneMsg struct{}
 
+// linkOpenedMsg reports whether the operating system accepted a link.
+type linkOpenedMsg struct{ err error }
+
 // reloadDecision is what to do about a note changing underneath us.
 type reloadDecision int
 
@@ -69,6 +72,7 @@ type Model struct {
 
 	width, height int
 	now           func() note.Day
+	openLink      func(string) error
 }
 
 // NewModel opens today's note. The watcher may be nil, in which case the note
@@ -89,6 +93,7 @@ func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 		width:       80,
 		height:      24,
 		now:         note.Today,
+		openLink:    systemOpenLink,
 	}, nil
 }
 
@@ -126,6 +131,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case yankFlashDoneMsg:
 		m.ed.ClearYankFlash()
+		return m, nil
+
+	case linkOpenedMsg:
+		if msg.err != nil {
+			m.setStatus("open link: " + msg.err.Error())
+		} else {
+			m.setStatus("opened link")
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -171,6 +184,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.setStatus(msg)
 		m.ed.ClearMessage()
 	}
+	if target, wanted := m.ed.TakeOpenLinkRequest(); wanted {
+		return m.openLinkCmd(target)
+	}
 	if m.ed.TakeSaveRequest() {
 		m.save()
 	}
@@ -181,6 +197,16 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return tea.Tick(flashDuration, func(time.Time) tea.Msg { return yankFlashDoneMsg{} })
 	}
 	return nil
+}
+
+func (m *Model) openLinkCmd(target string) tea.Cmd {
+	if err := validWebLink(target); err != nil {
+		m.setStatus(err.Error())
+		return nil
+	}
+	return func() tea.Msg {
+		return linkOpenedMsg{err: m.openLink(target)}
+	}
 }
 
 // browseKey handles the day navigation keys, reporting whether it took the
