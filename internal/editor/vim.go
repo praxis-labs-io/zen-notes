@@ -327,7 +327,7 @@ func clipboardRegister(text string) register {
 
 func (e *Editor) setRegister(reg register) {
 	e.reg = reg
-	if reg.text == "" {
+	if reg.text == "" && !reg.linewise {
 		return
 	}
 	e.clipboard = reg.text
@@ -1206,10 +1206,16 @@ func (e *Editor) startVisual(m Mode) {
 
 // put inserts the register after the cursor, or before it when after is false.
 func (e *Editor) put(after bool) {
-	if e.reg.text == "" {
+	e.putRegister(after, true)
+}
+
+func (e *Editor) putRegister(after, takeSnapshot bool) {
+	if e.reg.text == "" && !e.reg.linewise {
 		return
 	}
-	e.snapshot()
+	if takeSnapshot {
+		e.snapshot()
+	}
 
 	if e.reg.block {
 		col := e.cursor.Col

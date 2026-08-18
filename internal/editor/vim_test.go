@@ -86,10 +86,23 @@ func TestPasteImportsTheNormalModeRegister(t *testing.T) {
 }
 
 func TestNormalPasteRecognizesLinewiseClipboardText(t *testing.T) {
-	e := New("one")
-	e.Paste("two\n")
-	if e.Text() != "one\ntwo" {
-		t.Fatalf("Text = %q, want a linewise paste", e.Text())
+	tests := []struct {
+		name  string
+		paste string
+		want  string
+	}{
+		{"text line", "two\n", "one\ntwo"},
+		{"blank line", "\n", "one\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New("one")
+			e.Paste(tt.paste)
+			if e.Text() != tt.want {
+				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
+			}
+		})
 	}
 }
 
@@ -102,6 +115,7 @@ func TestPasteReplacesVisualSelections(t *testing.T) {
 		want  string
 	}{
 		{"characters", "abcd", "vl", "X", "Xcd"},
+		{"characters preserve trailing newline", "abcd", "vl", "X\n", "X\ncd"},
 		{"lines", "one\ntwo\nthree", "Vj", "new", "new\nthree"},
 		{"all lines", "one\ntwo", "Vj", "new", "new"},
 		{"block", "ab\nab", "<c-v>j", "X", "Xb\nXb"},
@@ -121,6 +135,18 @@ func TestPasteReplacesVisualSelections(t *testing.T) {
 				t.Fatalf("Text after undo = %q, want %q", e.Text(), tt.text)
 			}
 		})
+	}
+}
+
+func TestVisualBlockPasteIsOneUndoAtUndoLimit(t *testing.T) {
+	e := New("ab\nab")
+	feed(t, e, strings.Repeat("~h", undoDepth))
+	feed(t, e, "<c-v>j")
+	e.Paste("X")
+	feed(t, e, "u")
+
+	if e.Text() != "ab\nab" {
+		t.Fatalf("Text after undo = %q, want original block", e.Text())
 	}
 }
 
@@ -734,6 +760,7 @@ func TestRegisterChangesRequestSystemClipboardSync(t *testing.T) {
 	}{
 		{"character yank", "foo bar", "yiw", "foo"},
 		{"line yank", "one\ntwo", "yy", "one\n"},
+		{"blank line yank", "\nnext", "yy", "\n"},
 		{"delete", "foo bar", "dw", "foo "},
 		{"change", "foo bar", "cw", "foo"},
 		{"substitute", "abc", "s", "a"},

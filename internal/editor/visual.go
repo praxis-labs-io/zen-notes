@@ -127,6 +127,9 @@ func (e *Editor) pasteVisual(reg register) {
 		e.pasteVisualBlock(from, to, reg)
 	default:
 		e.snapshot()
+		if reg.linewise {
+			reg.text += "\n"
+		}
 		reg.linewise, reg.block = false, false
 		e.buf.Delete(from, e.forwardOne(to))
 		end := e.buf.Insert(from, reg.text)
@@ -151,13 +154,9 @@ func (e *Editor) pasteVisualBlock(from, to Pos, reg register) {
 	}
 	reg.text = strings.Join(block, "\n")
 
-	undoLen := len(e.undo)
 	e.applyVisual('d')
 	e.setRegister(reg)
-	e.put(false)
-	if len(e.undo) > undoLen+1 {
-		e.undo = e.undo[:len(e.undo)-1]
-	}
+	e.putRegister(false, false)
 }
 
 func toggleCase(r rune) rune {
