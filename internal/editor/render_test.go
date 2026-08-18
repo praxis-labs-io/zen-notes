@@ -299,6 +299,47 @@ func TestGutterWidthGrowsWithTheLineCount(t *testing.T) {
 	}
 }
 
+func TestWrappedMarkdownPreservesItsContentIndent(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want int
+	}{
+		{"indented prose", "    alpha beta gamma delta", 4},
+		{"unordered list", "  - alpha beta gamma delta", 4},
+		{"nested list", "    - alpha beta gamma delta", 6},
+		{"ordered list", "10. alpha beta gamma delta", 4},
+		{"task list", "- [ ] alpha beta gamma delta", 6},
+		{"blockquote", "  > alpha beta gamma delta", 4},
+		{"nested blockquote", "  > > alpha beta gamma delta", 6},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			gw := GutterWidth(1)
+			rows := strings.Split(ansi.Strip(e.Render(gw+14, 10).Content), "\n")
+			if len(rows) < 2 {
+				t.Fatal("line did not wrap")
+			}
+			text := rows[1][gw:]
+			if got := len(text) - len(strings.TrimLeft(text, " ")); got != tt.want {
+				t.Fatalf("continuation indent = %d, want %d; row %q", got, tt.want, rows[1])
+			}
+		})
+	}
+}
+
+func TestCursorFollowsAListHangingIndent(t *testing.T) {
+	e := New("    - alpha beta gamma")
+	feed(t, e, "$")
+	gw := GutterWidth(1)
+	got := e.Render(gw+14, 10)
+	if got.CursorRow != 2 || got.CursorCol != gw+10 {
+		t.Fatalf("cursor = %d, %d; want 2, %d", got.CursorRow, got.CursorCol, gw+10)
+	}
+}
+
 func TestGutterIsBlankOnWrappedRows(t *testing.T) {
 	e := New("hello world this wraps")
 
