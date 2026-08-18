@@ -38,6 +38,31 @@ func TestGXUsesRunePositionsForUnicodeLabels(t *testing.T) {
 	}
 }
 
+func TestGXParsesMarkdownDestinations(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"balanced parentheses", "[docs](https://example.com/wiki/Foo_(bar))", "https://example.com/wiki/Foo_(bar)"},
+		{"pointy brackets", "[site](<https://example.com>)", "https://example.com"},
+		{"double quoted title", `[site](https://example.com "Site")`, "https://example.com"},
+		{"single quoted title", "[site](https://example.com 'Site')", "https://example.com"},
+		{"parenthesized title", "[site](https://example.com (Site))", "https://example.com"},
+		{"escaped punctuation", `[docs](https://example.com/Foo_\(bar\))`, "https://example.com/Foo_(bar)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, "$gx")
+			target, ok := e.TakeOpenLinkRequest()
+			if !ok || target != tt.want {
+				t.Fatalf("link request = %q, %v, want %q", target, ok, tt.want)
+			}
+		})
+	}
+}
+
 func TestGXSelectsTheLinkUnderTheCursor(t *testing.T) {
 	e := run(t, "[a](https://a.example) [b](https://b.example)", "$gx")
 	target, ok := e.TakeOpenLinkRequest()
@@ -54,6 +79,9 @@ func TestGXRejectsTextAndMalformedLinks(t *testing.T) {
 		{"outside a link", "plain [link](https://example.com)"},
 		{"missing destination parenthesis", "[link](https://example.com"},
 		{"missing label bracket", "[link(https://example.com)"},
+		{"unbalanced destination", "[link](https://example.com/Foo_(bar)"},
+		{"unterminated pointy destination", "[link](<https://example.com)"},
+		{"unterminated title", `[link](https://example.com "Site)`},
 	}
 
 	for _, tt := range tests {

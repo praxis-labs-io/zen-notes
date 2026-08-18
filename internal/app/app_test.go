@@ -181,6 +181,31 @@ func TestGXReportsPlatformLaunchFailure(t *testing.T) {
 	}
 }
 
+func TestGXIgnoresSupersededLaunchResults(t *testing.T) {
+	m := newTestModel(t, "[old](https://old.example) [new](https://new.example)")
+	m.openLink = func(target string) error {
+		if target == "https://old.example" {
+			return errors.New("old failure")
+		}
+		return nil
+	}
+
+	m.handleKey(keyMsg("g"))
+	oldCmd := m.handleKey(keyMsg("x"))
+	m.handleKey(keyMsg("$"))
+	m.handleKey(keyMsg("g"))
+	newCmd := m.handleKey(keyMsg("x"))
+	if oldCmd == nil || newCmd == nil {
+		t.Fatal("gx returned no command")
+	}
+
+	m.Update(newCmd())
+	m.Update(oldCmd())
+	if m.status != "opened link" {
+		t.Fatalf("status = %q, want latest launch result", m.status)
+	}
+}
+
 func TestTypingReachesTheBuffer(t *testing.T) {
 	m := newTestModel(t, "")
 	press(m, "i", "h", "i")
