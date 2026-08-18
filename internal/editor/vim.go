@@ -149,21 +149,25 @@ type Editor struct {
 	undo []snapshot
 	redo []snapshot
 
-	desiredCol     int
-	top            int
-	rows           []vrow
-	cursorRow      int
-	lastVisual     [2]Pos
-	height         int
-	dirty          bool
-	darkBackground bool
-	selection      lipgloss.Style
-	flashStyle     lipgloss.Style
-	matchStyle     lipgloss.Style
-	cursorLine     color.Color
-	flash          flashRange
-	quit           bool
-	saveWanted     bool
+	desiredCol      int
+	top             int
+	rows            []vrow
+	cursorRow       int
+	lastVisual      [2]Pos
+	height          int
+	dirty           bool
+	darkBackground  bool
+	selection       lipgloss.Style
+	flashStyle      lipgloss.Style
+	matchStyle      lipgloss.Style
+	cursorLine      color.Color
+	flash           flashRange
+	quit            bool
+	saveWanted      bool
+	clipboard       string
+	clipboardWanted bool
+	openLink        string
+	openLinkWanted  bool
 }
 
 const undoDepth = 200
@@ -225,6 +229,20 @@ func (e *Editor) TakeSaveRequest() bool {
 	return want
 }
 
+// TakeClipboardRequest returns register text to copy to the system clipboard.
+func (e *Editor) TakeClipboardRequest() (string, bool) {
+	text, wanted := e.clipboard, e.clipboardWanted
+	e.clipboard, e.clipboardWanted = "", false
+	return text, wanted
+}
+
+// TakeOpenLinkRequest returns a link requested by gx and clears the request.
+func (e *Editor) TakeOpenLinkRequest() (string, bool) {
+	target, wanted := e.openLink, e.openLinkWanted
+	e.openLink, e.openLinkWanted = "", false
+	return target, wanted
+}
+
 // Message is the last thing the editor wants to tell the user.
 func (e *Editor) Message() string { return e.message }
 
@@ -278,6 +296,50 @@ func (e *Editor) Feed(k Key) {
 	default:
 		e.normalKey(k)
 	}
+}
+
+// Paste imports system clipboard text into the register and active mode.
+func (e *Editor) Paste(text string) {
+	if text == "" {
+		return
+	}
+
+	reg := clipboardRegister(text)
+	switch {
+	case e.mode == ModeInsert:
+		e.setRegister(reg)
+		e.cursor = e.buf.Insert(e.cursor, text)
+		e.dirty = true
+	case e.mode.Visual():
+		e.pasteVisual(reg)
+	case e.mode == ModeNormal:
+		e.setRegister(reg)
+		e.put(true)
+	}
+}
+
+func clipboardRegister(text string) register {
+	if strings.HasSuffix(text, "\n") {
+		return register{text: strings.TrimSuffix(text, "\n"), linewise: true}
+	}
+	return register{text: text}
+}
+
+func (e *Editor) setRegister(reg register) {
+	e.reg = reg
+	e.requestClipboard(reg)
+}
+
+func (e *Editor) requestClipboard(reg register) {
+	e.clipboard, e.clipboardWanted = "", false
+	if reg.text == "" && !reg.linewise {
+		return
+	}
+	e.clipboard = reg.text
+	if reg.linewise {
+		e.clipboard += "\n"
+	}
+	e.clipboardWanted = true
 }
 
 // clampCursor keeps the caret on a real rune. Normal and visual modes stop on
@@ -334,8 +396,13 @@ func (e *Editor) insertKey(k Key) {
 		e.backspace()
 		return
 	case "tab":
-		e.cursor = e.buf.Insert(e.cursor, "\t")
-		e.dirty = true
+		if !e.shiftListItem(1) {
+			e.cursor = e.buf.Insert(e.cursor, "\t")
+			e.dirty = true
+		}
+		return
+	case "backtab":
+		e.shiftListItem(-1)
 		return
 	case "up", "down", "left", "right":
 		e.arrow(k.Name)
@@ -361,7 +428,7 @@ func (e *Editor) smartEnter() {
 func (e *Editor) applyInsertEdit(edit insertEdit) {
 	if edit.deleteTo > 0 {
 		e.buf.Delete(Pos{e.cursor.Line, 0}, Pos{e.cursor.Line, edit.deleteTo})
-		e.cursor.Col = 0
+		e.cursor.Col = max(e.cursor.Col-edit.deleteTo, 0)
 	}
 	if edit.insert != "" {
 		e.cursor = e.buf.Insert(e.cursor, edit.insert)
@@ -547,6 +614,10 @@ func (e *Editor) namedNormalKey(name string) {
 	case "c-v":
 		e.startVisual(ModeVisualBlock)
 		e.pend = pending{}
+	case "copy":
+		if e.mode.Visual() {
+			e.applyVisual('y')
+		}
 	}
 }
 
@@ -758,6 +829,9 @@ func (e *Editor) resolveAwait(r rune) {
 				line = min(e.pend.count1-1, e.buf.LineCount()-1)
 			}
 			e.applyMotion(motion{Pos{line, 0}, linewise})
+		case 'x':
+			e.requestLinkUnderCursor()
+			e.pend = pending{}
 		case 'U', 'u', '~':
 			// gU, gu and g~ are operators, so they wait for a motion next.
 			e.pend.op, _ = caseOp(r)
@@ -789,6 +863,18 @@ func (e *Editor) resolveAwait(r rune) {
 
 	e.lastFind = find{kind: await, target: r}
 	e.applyFind(await, r, e.pend.count())
+}
+
+func (e *Editor) requestLinkUnderCursor() {
+	if e.mode != ModeNormal || e.pend.op != 0 {
+		return
+	}
+	link, ok := inlineLinkAt(e.buf.runes(e.cursor.Line), e.cursor.Col)
+	if !ok {
+		e.message = "no link under cursor"
+		return
+	}
+	e.openLink, e.openLinkWanted = link.target, true
 }
 
 // applyFind runs one of f, t, F or T and moves or operates with the result.
@@ -920,7 +1006,7 @@ func (e *Editor) operateLines(op rune, from, to int) {
 	for i := from; i <= to; i++ {
 		lines = append(lines, e.buf.Line(i))
 	}
-	e.reg = register{text: strings.Join(lines, "\n"), linewise: true}
+	e.setRegister(register{text: strings.Join(lines, "\n"), linewise: true})
 
 	if op == 'y' {
 		e.flashYank(Pos{from, 0}, Pos{to, 0}, true, false)
@@ -964,7 +1050,7 @@ func (e *Editor) operateChars(op rune, from, to Pos) {
 		return
 	}
 	if op == 'y' {
-		e.reg = register{text: e.textBetween(from, to)}
+		e.setRegister(register{text: e.textBetween(from, to)})
 		last := to
 		if last.Col > 0 {
 			last.Col--
@@ -977,7 +1063,7 @@ func (e *Editor) operateChars(op rune, from, to Pos) {
 	}
 
 	e.snapshot()
-	e.reg = register{text: e.buf.Delete(from, to)}
+	e.setRegister(register{text: e.buf.Delete(from, to)})
 	e.cursor = from
 	if op == 'c' {
 		e.mode = ModeInsert
@@ -1058,7 +1144,7 @@ func (e *Editor) command(r rune) {
 	case 'x':
 		e.snapshot()
 		end := Pos{e.cursor.Line, min(e.cursor.Col+n, e.buf.LineLen(e.cursor.Line))}
-		e.reg = register{text: e.buf.Delete(e.cursor, end)}
+		e.setRegister(register{text: e.buf.Delete(e.cursor, end)})
 		e.clampCursor()
 	case 'X':
 		if e.cursor.Col == 0 {
@@ -1066,7 +1152,7 @@ func (e *Editor) command(r rune) {
 		}
 		e.snapshot()
 		start := Pos{e.cursor.Line, max(e.cursor.Col-n, 0)}
-		e.reg = register{text: e.buf.Delete(start, e.cursor)}
+		e.setRegister(register{text: e.buf.Delete(start, e.cursor)})
 		e.cursor = start
 		e.clampCursor()
 	case 'D':
@@ -1125,10 +1211,16 @@ func (e *Editor) startVisual(m Mode) {
 
 // put inserts the register after the cursor, or before it when after is false.
 func (e *Editor) put(after bool) {
-	if e.reg.text == "" {
+	e.putRegister(after, true)
+}
+
+func (e *Editor) putRegister(after, takeSnapshot bool) {
+	if e.reg.text == "" && !e.reg.linewise {
 		return
 	}
-	e.snapshot()
+	if takeSnapshot {
+		e.snapshot()
+	}
 
 	if e.reg.block {
 		col := e.cursor.Col
@@ -1149,10 +1241,14 @@ func (e *Editor) put(after bool) {
 
 	if e.reg.linewise {
 		at := e.cursor.Line
-		if after {
+		to := at
+		if e.buf.LineCount() == 1 && e.buf.Line(0) == "" {
+			to++
+		} else if after {
 			at++
+			to = at
 		}
-		e.buf.ReplaceLines(at, at, strings.Split(e.reg.text, "\n"))
+		e.buf.ReplaceLines(at, to, strings.Split(e.reg.text, "\n"))
 		e.cursor = Pos{at, 0}
 		e.clampCursor()
 		return

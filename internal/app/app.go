@@ -33,6 +33,15 @@ type fileChangedMsg string
 // yankFlashDoneMsg puts out the highlight over a yank.
 type yankFlashDoneMsg struct{}
 
+// linkOpenedMsg reports that the operating system accepted a link.
+type linkOpenedMsg struct{ request int }
+
+// linkOpenFailedMsg reports that the operating system rejected a link.
+type linkOpenFailedMsg struct {
+	request int
+	err     error
+}
+
 // reloadDecision is what to do about a note changing underneath us.
 type reloadDecision int
 
@@ -69,6 +78,8 @@ type Model struct {
 
 	width, height int
 	now           func() note.Day
+	openLink      func(string) error
+	linkRequest   int
 }
 
 // NewModel opens today's note. The watcher may be nil, in which case the note
@@ -89,6 +100,7 @@ func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 		width:       80,
 		height:      24,
 		now:         note.Today,
+		openLink:    systemOpenLink,
 	}, nil
 }
 
@@ -128,6 +140,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ed.ClearYankFlash()
 		return m, nil
 
+	case linkOpenedMsg:
+		if msg.request == m.linkRequest {
+			m.setStatus("opened link")
+		}
+		return m, nil
+
+	case linkOpenFailedMsg:
+		if msg.request == m.linkRequest {
+			m.setStatus("open link: " + msg.err.Error())
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.ed.SetHeight(m.textHeight())
@@ -142,6 +166,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fileChangedMsg:
 		m.reload(string(msg))
 		return m, waitForChange(m.watch)
+
+	case tea.PasteMsg:
+		if m.help {
+			return m, nil
+		}
+		m.clearStatus()
+		m.ed.Paste(msg.Content)
+		return m, m.takeClipboardCmd()
 
 	case tea.KeyPressMsg:
 		return m, m.handleKey(msg)
@@ -171,6 +203,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.setStatus(msg)
 		m.ed.ClearMessage()
 	}
+	clipboardCmd := m.takeClipboardCmd()
+	if target, wanted := m.ed.TakeOpenLinkRequest(); wanted {
+		return m.openLinkCmd(target)
+	}
 	if m.ed.TakeSaveRequest() {
 		m.save()
 	}
@@ -178,9 +214,36 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.quit()
 	}
 	if m.ed.YankFlash() {
-		return tea.Tick(flashDuration, func(time.Time) tea.Msg { return yankFlashDoneMsg{} })
+		flashCmd := tea.Tick(flashDuration, func(time.Time) tea.Msg { return yankFlashDoneMsg{} })
+		if clipboardCmd != nil {
+			return tea.Batch(clipboardCmd, flashCmd)
+		}
+		return flashCmd
 	}
-	return nil
+	return clipboardCmd
+}
+
+func (m *Model) takeClipboardCmd() tea.Cmd {
+	text, wanted := m.ed.TakeClipboardRequest()
+	if !wanted {
+		return nil
+	}
+	return tea.SetClipboard(text)
+}
+
+func (m *Model) openLinkCmd(target string) tea.Cmd {
+	m.linkRequest++
+	request := m.linkRequest
+	if err := validWebLink(target); err != nil {
+		m.setStatus(err.Error())
+		return nil
+	}
+	return func() tea.Msg {
+		if err := m.openLink(target); err != nil {
+			return linkOpenFailedMsg{request: request, err: err}
+		}
+		return linkOpenedMsg{request: request}
+	}
 }
 
 // browseKey handles the day navigation keys, reporting whether it took the
@@ -335,6 +398,9 @@ func (m *Model) quit() tea.Cmd {
 // translateKey converts a Bubble Tea keystroke into an editor key, reporting
 // false for combinations the editor has no use for.
 func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
+	if msg.Mod == tea.ModSuper && msg.Code == 'c' {
+		return editor.Named("copy"), true
+	}
 	if msg.Mod&tea.ModCtrl != 0 {
 		switch msg.Code {
 		case 'd', 'u', 'r', 'v':
@@ -355,6 +421,9 @@ func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
 	case tea.KeyBackspace:
 		return editor.Named("backspace"), true
 	case tea.KeyTab:
+		if msg.Mod&tea.ModShift != 0 {
+			return editor.Named("backtab"), true
+		}
 		return editor.Named("tab"), true
 	case tea.KeyUp:
 		return editor.Named("up"), true
