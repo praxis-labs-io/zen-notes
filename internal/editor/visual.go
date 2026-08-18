@@ -141,6 +141,7 @@ func (e *Editor) pasteVisual(reg register) {
 }
 
 func (e *Editor) pasteVisualBlock(from, to Pos, reg register) {
+	clipboard := reg
 	reg.linewise, reg.block = false, true
 	parts := strings.Split(reg.text, "\n")
 	height := to.Line - from.Line + 1
@@ -155,7 +156,8 @@ func (e *Editor) pasteVisualBlock(from, to Pos, reg register) {
 	reg.text = strings.Join(block, "\n")
 
 	e.applyVisual('d')
-	e.setRegister(reg)
+	e.reg = reg
+	e.requestClipboard(clipboard)
 	e.putRegister(false, false)
 }
 

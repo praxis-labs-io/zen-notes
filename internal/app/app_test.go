@@ -94,6 +94,17 @@ func TestPasteImportsTheNormalModeRegister(t *testing.T) {
 	}
 }
 
+func TestPasteDoesNotEditBehindHelp(t *testing.T) {
+	m := newTestModel(t, "keep")
+	press(m, "?")
+	m.Update(tea.PasteMsg{Content: "hidden"})
+	press(m, "j")
+
+	if m.ed.Text() != "keep" {
+		t.Fatalf("Text = %q, want unchanged after closing help", m.ed.Text())
+	}
+}
+
 func TestDeleteRequestsSystemClipboardUpdate(t *testing.T) {
 	m := newTestModel(t, "abc")
 	cmd := m.handleKey(keyMsg("x"))

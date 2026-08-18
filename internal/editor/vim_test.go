@@ -88,16 +88,18 @@ func TestPasteImportsTheNormalModeRegister(t *testing.T) {
 func TestNormalPasteRecognizesLinewiseClipboardText(t *testing.T) {
 	tests := []struct {
 		name  string
+		text  string
 		paste string
 		want  string
 	}{
-		{"text line", "two\n", "one\ntwo"},
-		{"blank line", "\n", "one\n"},
+		{"text line", "one", "two\n", "one\ntwo"},
+		{"blank line", "one", "\n", "one\n"},
+		{"text into empty note", "", "one\n", "one"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := New("one")
+			e := New(tt.text)
 			e.Paste(tt.paste)
 			if e.Text() != tt.want {
 				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
@@ -147,6 +149,30 @@ func TestVisualBlockPasteIsOneUndoAtUndoLimit(t *testing.T) {
 
 	if e.Text() != "ab\nab" {
 		t.Fatalf("Text after undo = %q, want original block", e.Text())
+	}
+}
+
+func TestVisualBlockPastePreservesSystemClipboard(t *testing.T) {
+	tests := []struct {
+		name  string
+		paste string
+		want  string
+	}{
+		{"single row expanded", "X", "X"},
+		{"excess rows truncated", "X\nY\nZ", "X\nY\nZ"},
+		{"blank line", "\n", "\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New("ab\nab")
+			feed(t, e, "<c-v>j")
+			e.Paste(tt.paste)
+			got, ok := e.TakeClipboardRequest()
+			if !ok || got != tt.want {
+				t.Fatalf("clipboard request = %q, %v, want %q", got, ok, tt.want)
+			}
+		})
 	}
 }
 

@@ -327,6 +327,11 @@ func clipboardRegister(text string) register {
 
 func (e *Editor) setRegister(reg register) {
 	e.reg = reg
+	e.requestClipboard(reg)
+}
+
+func (e *Editor) requestClipboard(reg register) {
+	e.clipboard, e.clipboardWanted = "", false
 	if reg.text == "" && !reg.linewise {
 		return
 	}
@@ -1236,10 +1241,14 @@ func (e *Editor) putRegister(after, takeSnapshot bool) {
 
 	if e.reg.linewise {
 		at := e.cursor.Line
-		if after {
+		to := at
+		if e.buf.LineCount() == 1 && e.buf.Line(0) == "" {
+			to++
+		} else if after {
 			at++
+			to = at
 		}
-		e.buf.ReplaceLines(at, at, strings.Split(e.reg.text, "\n"))
+		e.buf.ReplaceLines(at, to, strings.Split(e.reg.text, "\n"))
 		e.cursor = Pos{at, 0}
 		e.clampCursor()
 		return

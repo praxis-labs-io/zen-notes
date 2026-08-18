@@ -168,6 +168,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForChange(m.watch)
 
 	case tea.PasteMsg:
+		if m.help {
+			return m, nil
+		}
 		m.clearStatus()
 		m.ed.Paste(msg.Content)
 		return m, m.takeClipboardCmd()
