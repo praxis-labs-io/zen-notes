@@ -254,6 +254,12 @@ func TestSmartEnterUsesMarkdownContext(t *testing.T) {
 		{"ordered list increments", "", "i9. one<cr>two<esc>", "9. one\n10. two"},
 		{"parenthesized list increments", "", "i2) one<cr>two<esc>", "2) one\n3) two"},
 		{"task list resets", "", "i- [x] done<cr>next<esc>", "- [x] done\n- [ ] next"},
+		{"bare task continues", "", "i[ ] one<cr>two<esc>", "[ ] one\n[ ] two"},
+		{"checked bare task resets", "", "i[x] done<cr>next<esc>", "[x] done\n[ ] next"},
+		{"uppercase checked bare task resets", "", "i[X] done<cr>next<esc>", "[X] done\n[ ] next"},
+		{"bare task indentation is preserved", "  [ ] one", "A<cr>two<esc>", "  [ ] one\n  [ ] two"},
+		{"bare task continues unicode content", "", "i[ ] 日本語<cr>続き<esc>", "[ ] 日本語\n[ ] 続き"},
+		{"malformed bare task splits normally", "", "i[ ]task<cr>next<esc>", "[ ]task\nnext"},
 		{"indentation is preserved", "  - one", "A<cr>two<esc>", "  - one\n  - two"},
 		{"unicode content continues", "", "i- 日本語<cr>続き<esc>", "- 日本語\n- 続き"},
 	}
@@ -278,7 +284,9 @@ func TestStartingAListSeparatesItFromProse(t *testing.T) {
 		{"keeps an existing separator", "Prose\n\n", "Gi- item<esc>", "Prose\n\n- item"},
 		{"separates an ordered list", "Prose\n", "Gi1. item<esc>", "Prose\n\n1. item"},
 		{"separates a task list", "Prose\n", "Gi- [ ] item<esc>", "Prose\n\n- [ ] item"},
+		{"separates a bare task", "Prose\n", "Gi[ ] item<esc>", "Prose\n\n[ ] item"},
 		{"keeps adjacent list items together", "- one\n", "Gi- two<esc>", "- one\n- two"},
+		{"keeps adjacent bare tasks together", "[ ] one\n", "Gi[x] two<esc>", "[ ] one\n[x] two"},
 	}
 
 	for _, tt := range tests {
@@ -299,6 +307,7 @@ func TestEnterOnEmptyListItemExitsTheList(t *testing.T) {
 		{"unordered", "i- one<cr><cr>body<esc>", "- one\n\nbody"},
 		{"ordered", "i1. one<cr><cr>body<esc>", "1. one\n\nbody"},
 		{"task", "i- [ ] one<cr><cr>body<esc>", "- [ ] one\n\nbody"},
+		{"bare task", "i[ ] one<cr><cr>body<esc>", "[ ] one\n\nbody"},
 	}
 
 	for _, tt := range tests {
@@ -318,6 +327,7 @@ func TestBackspaceAfterEmptyListMarkerExitsTheList(t *testing.T) {
 		{"unordered", "i- <bs>body<esc>"},
 		{"ordered", "i1. <bs>body<esc>"},
 		{"task", "i- [ ] <bs>body<esc>"},
+		{"bare task", "i[ ] <bs>body<esc>"},
 	}
 
 	for _, tt := range tests {
@@ -330,9 +340,21 @@ func TestBackspaceAfterEmptyListMarkerExitsTheList(t *testing.T) {
 }
 
 func TestBackspaceExitingAListLeavesASeparator(t *testing.T) {
-	e := run(t, "- one\n- ", "GA<bs>body<esc>")
-	if e.Text() != "- one\n\nbody" {
-		t.Fatalf("Text = %q, want a blank line before body", e.Text())
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"bullet", "- one\n- ", "- one\n\nbody"},
+		{"bare task", "[ ] one\n[ ] ", "[ ] one\n\nbody"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, "GA<bs>body<esc>")
+			if e.Text() != tt.want {
+				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
+			}
+		})
 	}
 }
 
@@ -345,6 +367,7 @@ func TestTabNestsListItems(t *testing.T) {
 		{"unordered", "- one\n- two", "- one\n  - two"},
 		{"ordered", "1. one\n2. two", "1. one\n  2. two"},
 		{"task", "- [ ] one\n- [x] two", "- [ ] one\n  - [x] two"},
+		{"bare task", "[ ] one\n[x] two", "[ ] one\n  [x] two"},
 	}
 
 	for _, tt := range tests {
@@ -357,10 +380,28 @@ func TestTabNestsListItems(t *testing.T) {
 }
 
 func TestTabMovesTheWholeListSubtree(t *testing.T) {
-	text := "- one\n- two\n  - child\n    - grandchild\n- three"
-	want := "- one\n  - two\n    - child\n      - grandchild\n- three"
-	if got := run(t, text, "jA<tab><esc>").Text(); got != want {
-		t.Fatalf("Text = %q, want %q", got, want)
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			"bullet",
+			"- one\n- two\n  - child\n    - grandchild\n- three",
+			"- one\n  - two\n    - child\n      - grandchild\n- three",
+		},
+		{
+			"bare task",
+			"[ ] one\n[x] two\n  - child\n    continuation\n[ ] three",
+			"[ ] one\n  [x] two\n    - child\n      continuation\n[ ] three",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, "jA<tab><esc>").Text(); got != tt.want {
+				t.Fatalf("Text = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -437,12 +478,14 @@ func TestShiftTabStopsAtTheTopLevel(t *testing.T) {
 }
 
 func TestTabRemainsLiteralOutsideAList(t *testing.T) {
-	e := run(t, "body", "A<tab><esc>")
-	if e.Text() != "body\t" {
-		t.Fatalf("Text = %q, want a literal tab", e.Text())
+	for _, text := range []string{"body", "[ ]task", "[y] task", "[] task"} {
+		e := run(t, text, "A<tab><esc>")
+		if e.Text() != text+"\t" {
+			t.Errorf("Text = %q, want a literal tab after %q", e.Text(), text)
+		}
 	}
 
-	e = run(t, "body", "A<backtab><esc>")
+	e := run(t, "body", "A<backtab><esc>")
 	if e.Text() != "body" {
 		t.Fatalf("Shift-Tab changed non-list text to %q", e.Text())
 	}
@@ -457,6 +500,7 @@ func TestEmptyNestedItemDedentsOnEnter(t *testing.T) {
 		{"unordered", "- parent\n  - ", "- parent\n- "},
 		{"ordered", "1. parent\n  2. ", "1. parent\n2. "},
 		{"task", "- [ ] parent\n  - [ ] ", "- [ ] parent\n- [ ] "},
+		{"bare task", "[ ] parent\n  [ ] ", "[ ] parent\n[ ] "},
 		{"one level at a time", "- parent\n    - ", "- parent\n  - "},
 	}
 
@@ -478,6 +522,7 @@ func TestEmptyNestedItemDedentsOnBackspace(t *testing.T) {
 		{"unordered", "- parent\n  - ", "- parent\n- "},
 		{"ordered", "1. parent\n  2. ", "1. parent\n2. "},
 		{"task", "- [ ] parent\n  - [ ] ", "- [ ] parent\n- [ ] "},
+		{"bare task", "[ ] parent\n  [ ] ", "[ ] parent\n[ ] "},
 	}
 
 	for _, tt := range tests {
@@ -490,21 +535,43 @@ func TestEmptyNestedItemDedentsOnBackspace(t *testing.T) {
 }
 
 func TestEmptyNestedItemExitsAfterReachingTopLevel(t *testing.T) {
-	e := run(t, "- parent\n  - ", "GA<cr><cr>body<esc>")
-	if e.Text() != "- parent\n\nbody" {
-		t.Fatalf("Text = %q, want a blank line before body", e.Text())
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"bullet", "- parent\n  - ", "- parent\n\nbody"},
+		{"bare task", "[ ] parent\n  [ ] ", "[ ] parent\n\nbody"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, "GA<cr><cr>body<esc>")
+			if e.Text() != tt.want {
+				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
+			}
+		})
 	}
 }
 
 func TestListIndentKeepsCursorWithTheContent(t *testing.T) {
-	e := run(t, "- one\n- two", "jA<tab>")
-	if e.Cursor() != (Pos{1, 7}) {
-		t.Fatalf("Cursor = %v, want {1 7}", e.Cursor())
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want Pos
+	}{
+		{"nest bullet", "- one\n- two", "jA<tab>", Pos{1, 7}},
+		{"dedent bullet", "- one\n  - two", "jA<backtab>", Pos{1, 5}},
+		{"nest bare task", "[ ] one\n[ ] two", "jA<tab>", Pos{1, 9}},
+		{"dedent bare task", "[ ] one\n  [ ] two", "jA<backtab>", Pos{1, 7}},
 	}
-
-	e = run(t, "- one\n  - two", "jA<backtab>")
-	if e.Cursor() != (Pos{1, 5}) {
-		t.Fatalf("Cursor = %v, want {1 5}", e.Cursor())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, tt.keys)
+			if e.Cursor() != tt.want {
+				t.Fatalf("Cursor = %v, want %v", e.Cursor(), tt.want)
+			}
+		})
 	}
 }
 

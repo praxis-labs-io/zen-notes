@@ -56,6 +56,12 @@ func TestClassifyLine(t *testing.T) {
 		{"blockquote", "> quote", "MM....."},
 		{"unchecked box", "- [ ] task", "MMOOO....."},
 		{"checked box", "- [x] task", "MMXXX....."},
+		{"bare unchecked box", "[ ] task", "OOO....."},
+		{"indented bare unchecked box", "  [ ] task", "..OOO....."},
+		{"indented bare checked box", "  [x] task", "..XXX....."},
+		{"indented uppercase checked box", "  [X] task", "..XXX....."},
+		{"malformed bare box", "  [ ]task", "........."},
+		{"malformed column-zero bare box", "[ ]task", "......."},
 		{"link", "[text](url)", "LLLLLLLLLLL"},
 		{"fence marker", "```go", "MMMMM"},
 		{"empty line", "", ""},
@@ -494,6 +500,10 @@ func TestWrappedMarkdownPreservesItsContentIndent(t *testing.T) {
 		{"nested list", "    - alpha beta gamma delta", 6},
 		{"ordered list", "10. alpha beta gamma delta", 4},
 		{"task list", "- [ ] alpha beta gamma delta", 6},
+		{"bare task", "[ ] alpha beta gamma delta", 4},
+		{"indented bare task", "  [ ] alpha beta gamma delta", 6},
+		{"checked bare task", "    [x] alpha beta gamma delta", 8},
+		{"malformed bare task", "  [ ]alpha beta gamma delta", 2},
 		{"blockquote", "  > alpha beta gamma delta", 4},
 		{"nested blockquote", "  > > alpha beta gamma delta", 6},
 		{"blockquote list", "> - alpha beta gamma delta", 4},
@@ -517,11 +527,13 @@ func TestWrappedMarkdownPreservesItsContentIndent(t *testing.T) {
 }
 
 func TestNarrowHangingIndentKeepsWideRunes(t *testing.T) {
-	e := New("- 日本語")
-	got := ansi.Strip(e.Render(GutterWidth(1)+3, 10).Content)
-	for _, r := range "日本語" {
-		if !strings.ContainsRune(got, r) {
-			t.Fatalf("render dropped %q: %q", r, got)
+	for _, text := range []string{"- 日本語", "[ ] 日本語", "  [x] 日本語"} {
+		e := New(text)
+		got := ansi.Strip(e.Render(GutterWidth(1)+3, 10).Content)
+		for _, r := range "日本語" {
+			if !strings.ContainsRune(got, r) {
+				t.Errorf("%q dropped %q: %q", text, r, got)
+			}
 		}
 	}
 }

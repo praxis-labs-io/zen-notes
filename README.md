@@ -95,9 +95,10 @@ paste shortcut imports external clipboard text, then pastes it in the active
 insert, normal or visual mode.
 
 Insert mode follows the Markdown around the cursor. Enter after a heading leaves
-a blank line for body text. Starting an unordered, ordered or task list leaves
-a blank line after preceding prose, then Enter continues its marker and
-indentation; a checked task continues as an unchecked one. Tab and Shift-Tab
+a blank line for body text. Starting an unordered, ordered or task list, using
+either `- [ ]` or a bare `[ ]`, leaves a blank line after preceding prose. Enter
+continues its marker and indentation; a checked task continues as an unchecked
+one. Tab and Shift-Tab
 nest or unnest an item and its children by two spaces, once it has a preceding
 sibling to nest beneath. Enter or Backspace on an empty nested item moves it out
 one level; at the top level, either exits with a blank line below.

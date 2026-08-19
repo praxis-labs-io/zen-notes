@@ -23,7 +23,7 @@ var (
 	bulletRe   = regexp.MustCompile(`^(\s*)([-*+]|\d+\.)(\s)`)
 	quoteRe    = regexp.MustCompile(`^(\s*)(>+)(\s)`)
 	fenceRe    = regexp.MustCompile("^\\s*(```|~~~)")
-	checkboxRe = regexp.MustCompile(`^\[( |x|X)\]`)
+	checkboxRe = regexp.MustCompile(`^\[( |x|X)\]\s`)
 	strongRe   = regexp.MustCompile(`\*\*[^*\n]+\*\*|__[^_\n]+__`)
 	emphasisRe = regexp.MustCompile(`\*[^*\n]+\*|_[^_\n]+_`)
 	codeRe     = regexp.MustCompile("`[^`\n]*`")
@@ -87,7 +87,9 @@ func markLinePrefix(runes []rune, classes []tokenClass) int {
 	line := string(runes)
 	start := 0
 
-	if m := bulletRe.FindStringSubmatchIndex(line); m != nil {
+	if item, ok := parseListLine(runes); ok && item.bareTask {
+		start = item.indent
+	} else if m := bulletRe.FindStringSubmatchIndex(line); m != nil {
 		start = runeLen(line[:m[1]])
 		fill(classes, runeLen(line[:m[4]]), start, tokMarker)
 	} else if m := quoteRe.FindStringSubmatchIndex(line); m != nil {

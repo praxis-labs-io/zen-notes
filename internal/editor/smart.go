@@ -15,6 +15,7 @@ type listLine struct {
 	indent       int
 	contentStart int
 	nextPrefix   string
+	bareTask     bool
 }
 
 // enterEdit describes the context-aware edit for Enter in insert mode.
@@ -76,6 +77,16 @@ func parseListLine(line []rune) (listLine, bool) {
 	}
 
 	indent := string(line[:indentEnd])
+	if hasTaskMarker(line, indentEnd) {
+		contentStart, ok := skipRequiredSpace(line, indentEnd+3)
+		if !ok {
+			return listLine{}, false
+		}
+		return listLine{
+			indent: indentEnd, contentStart: contentStart, nextPrefix: indent + "[ ] ", bareTask: true,
+		}, true
+	}
+
 	switch line[indentEnd] {
 	case '-', '*', '+':
 		return parseBulletList(line, indentEnd, indent)
