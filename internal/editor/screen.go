@@ -14,22 +14,28 @@ func (e *Editor) displayMotion(delta, count int) motion {
 		return motion{target: Pos{line, col}, kind: charExclusive}
 	}
 
-	pos := e.cursor
+	rows, targetRow, cursorCol := e.layoutAt(e.layoutWidth, e.cursor)
 	goal, hasGoal := e.desiredScreenCol, e.screenColSet
-	for range count {
-		rows, cursorRow, cursorCol := e.layoutAt(e.layoutWidth, pos)
-		if !hasGoal {
-			goal = min(cursorCol, e.layoutWidth-1)
-			hasGoal = true
-		}
+	if !hasGoal {
+		goal = min(cursorCol, e.layoutWidth-1)
+		hasGoal = true
+	}
 
-		targetRow := cursorRow + delta
-		for targetRow >= 0 && targetRow < len(rows) && rows[targetRow].synthetic {
-			targetRow += delta
+	moved := false
+	for range count {
+		nextRow := targetRow + delta
+		for nextRow >= 0 && nextRow < len(rows) && rows[nextRow].synthetic {
+			nextRow += delta
 		}
-		if targetRow < 0 || targetRow >= len(rows) {
+		if nextRow < 0 || nextRow >= len(rows) {
 			break
 		}
+		targetRow = nextRow
+		moved = true
+	}
+
+	pos := e.cursor
+	if moved {
 		row := rows[targetRow]
 		pos = Pos{row.line, screenColumnToRune(e.buf.runes(row.line), row, goal, e.layoutWidth)}
 	}
