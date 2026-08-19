@@ -96,7 +96,7 @@ func renderedRowWidth(runes []rune, start, end, indent, width int) int {
 	col := indent
 	for i := start; i < end && i < len(runes); i++ {
 		w := renderedRuneWidth(runes[i], col, width)
-		if w <= 0 {
+		if w < 0 {
 			break
 		}
 		col += w
@@ -109,10 +109,10 @@ func renderedRuneWidth(r rune, col, width int) int {
 	if col+w <= width {
 		return w
 	}
-	if r == '\t' {
+	if r == '\t' && col < width {
 		return width - col
 	}
-	return 0
+	return -1
 }
 
 func leadingSpaceEnd(runes []rune) int {
@@ -168,8 +168,11 @@ func screenColumnToRune(runes []rune, row vrow, desired, width int) int {
 	col, last := row.indent, -1
 	for i := row.start; i < row.end && i < len(runes); i++ {
 		w := renderedRuneWidth(runes[i], col, width)
-		if w <= 0 {
+		if w < 0 {
 			break
+		}
+		if w == 0 {
+			continue
 		}
 		last = i
 		if desired < col+w {

@@ -259,7 +259,9 @@ func TestSmartEnterUsesMarkdownContext(t *testing.T) {
 		{"uppercase checked bare task resets", "", "i[X] done<cr>next<esc>", "[X] done\n[ ] next"},
 		{"bare task indentation is preserved", "  [ ] one", "A<cr>two<esc>", "  [ ] one\n  [ ] two"},
 		{"bare task continues unicode content", "", "i[ ] 日本語<cr>続き<esc>", "[ ] 日本語\n[ ] 続き"},
+		{"bare task accepts Unicode separator", "", "i[ ] one<cr>two<esc>", "[ ] one\n[ ] two"},
 		{"malformed bare task splits normally", "", "i[ ]task<cr>next<esc>", "[ ]task\nnext"},
+		{"malformed task remains a bullet", "", "i- [ ]task<cr>next<esc>", "- [ ]task\n- next"},
 		{"indentation is preserved", "  - one", "A<cr>two<esc>", "  - one\n  - two"},
 		{"unicode content continues", "", "i- 日本語<cr>続き<esc>", "- 日本語\n- 続き"},
 	}
@@ -858,6 +860,49 @@ func TestDisplayLineMotionBeforeRenderFallsBackToLogicalLines(t *testing.T) {
 	}
 }
 
+func TestDisplayLineFallbackPreservesColumnsAndClampsOperators(t *testing.T) {
+	e := run(t, "abcd\na\nabcd", "$gjgj")
+	if e.Cursor() != (Pos{2, 3}) {
+		t.Fatalf("Cursor = %v, want {2 3}", e.Cursor())
+	}
+
+	tests := []struct {
+		name string
+		keys string
+		want string
+	}{
+		{"delete", "$dgj", "abcx"},
+		{"change", "$cgjZ<esc>", "abcZx"},
+		{"yank", "$ygj", "abcd\nx"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, "abcd\nx", tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDisplayLinePrefixesPreserveAnEstablishedScreenColumn(t *testing.T) {
+	e := New("abcdefghij\nabcd")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(2)+4, 10)
+	feed(t, e, "gjgjdgj")
+	if e.Text() != "abcdefghid" {
+		t.Fatalf("Text = %q, want abcdefghid", e.Text())
+	}
+
+	e = New("abcdefghij\nabcd")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(2)+4, 10)
+	feed(t, e, "gjgjvgj")
+	from, to, linewise := e.Selection()
+	if from != (Pos{0, 9}) || to != (Pos{1, 3}) || linewise {
+		t.Fatalf("Selection = %v, %v, %v; want {0 9}, {1 3}, false", from, to, linewise)
+	}
+}
+
 func TestDeleteOperators(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1420,6 +1465,16 @@ func TestScrollPositioningKeepsTheCursorLine(t *testing.T) {
 	feed(t, e, "zz")
 	if e.Cursor().Line != 20 {
 		t.Fatalf("cursor line = %d, want 20", e.Cursor().Line)
+	}
+}
+
+func TestScrollPositioningUsesFreshWrappedCursorRow(t *testing.T) {
+	e := New("abcdefghijkl")
+	e.SetHeight(3)
+	e.Render(GutterWidth(1)+4, 3)
+	feed(t, e, "gjzt")
+	if e.Top() != 1 {
+		t.Fatalf("top = %d, want wrapped cursor row 1", e.Top())
 	}
 }
 

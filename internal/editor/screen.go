@@ -10,7 +10,8 @@ func (e *Editor) applyDisplayMotion(delta, count int) {
 func (e *Editor) displayMotion(delta, count int) motion {
 	if e.layoutWidth <= 0 {
 		line := min(max(e.cursor.Line+delta*count, 0), e.buf.LineCount()-1)
-		return motion{target: Pos{line, e.desiredCol}, kind: charExclusive}
+		col := min(e.desiredCol, max(e.buf.LineLen(line)-1, 0))
+		return motion{target: Pos{line, col}, kind: charExclusive}
 	}
 
 	pos := e.cursor
@@ -76,6 +77,9 @@ func (e *Editor) screenMotion(r rune, count int) (motion, bool) {
 // scrollTop repositions the window around the cursor for zt, zz and zb,
 // leaving the cursor on its line.
 func (e *Editor) scrollTop(where rune) {
+	if e.layoutWidth > 0 {
+		_, e.cursorRow, _ = e.layoutAt(e.layoutWidth, e.cursor)
+	}
 	switch where {
 	case 't':
 		e.top = e.cursorRow

@@ -52,6 +52,8 @@ func TestClassifyLine(t *testing.T) {
 		{"dash bullet", "- item", "MM...."},
 		{"star bullet", "* item", "MM...."},
 		{"numbered list", "1. item", "MMM...."},
+		{"parenthesized list", "2) item", "MMM...."},
+		{"Unicode-separated bullet", "- item", "MM...."},
 		{"indented bullet", "  - item", "..MM...."},
 		{"blockquote", "> quote", "MM....."},
 		{"unchecked box", "- [ ] task", "MMOOO....."},
@@ -62,6 +64,9 @@ func TestClassifyLine(t *testing.T) {
 		{"indented uppercase checked box", "  [X] task", "..XXX....."},
 		{"malformed bare box", "  [ ]task", "........."},
 		{"malformed column-zero bare box", "[ ]task", "......."},
+		{"malformed task remains a bullet", "- [ ]task", "MM......."},
+		{"bare box with Unicode separator", "[ ] task", "OOO....."},
+		{"bullet box with Unicode separator", "- [ ] task", "MMOOO....."},
 		{"link", "[text](url)", "LLLLLLLLLLL"},
 		{"fence marker", "```go", "MMMMM"},
 		{"empty line", "", ""},
@@ -383,6 +388,28 @@ func TestRenderCursorPastTheLastRune(t *testing.T) {
 	}
 }
 
+func TestRenderCursorBeforeAnOmittedWrapSeparator(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+	}{
+		{"trailing separator", "abcd ", "$i"},
+		{"separator before wrapped text", "abcd efgh", "lllli"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			feed(t, e, tt.keys)
+			gw := GutterWidth(1)
+			got := e.Render(gw+4, 10)
+			if got.CursorRow != 1 || got.CursorCol != gw {
+				t.Fatalf("cursor = %d, %d; want 1, %d", got.CursorRow, got.CursorCol, gw)
+			}
+		})
+	}
+}
+
 func TestRenderCursorAtAnExactRightEdge(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -431,6 +458,21 @@ func TestRenderCursorAtAnExactRightEdge(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRenderContinuesAfterZeroWidthRunes(t *testing.T) {
+	e := New("ábc")
+	gw := GutterWidth(1)
+	got := ansi.Strip(e.Render(gw+2, 4).Content)
+	if !strings.Contains(got, "áb") || !strings.Contains(got, "c") {
+		t.Fatalf("render truncated zero-width text: %q", got)
+	}
+
+	e.Render(gw+2, 4)
+	feed(t, e, "gj")
+	if e.Cursor() != (Pos{0, 3}) {
+		t.Fatalf("gj cursor = %v, want {0 3}", e.Cursor())
 	}
 }
 

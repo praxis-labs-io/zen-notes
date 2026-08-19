@@ -205,6 +205,7 @@ func (e *Editor) Cursor() Pos { return e.cursor }
 func (e *Editor) SetCursor(p Pos) {
 	e.cursor = e.buf.Clamp(p)
 	e.clampCursor()
+	e.desiredCol = e.cursor.Col
 	e.screenColSet = false
 }
 
@@ -605,7 +606,9 @@ func (e *Editor) normalKey(k Key) {
 }
 
 func (e *Editor) namedNormalKey(name string) {
-	e.screenColSet = false
+	if name != "c-v" {
+		e.screenColSet = false
+	}
 	switch name {
 	case "esc":
 		e.pend = pending{}
@@ -683,6 +686,7 @@ func (e *Editor) operator(r rune) bool {
 	if op, ok := caseOp(r); ok && e.pend.op == op {
 		last := min(e.cursor.Line+e.pend.count()-1, e.buf.LineCount()-1)
 		e.applyOperator(op, motion{target: Pos{last, 0}, kind: linewise})
+		e.screenColSet = false
 		e.pend = pending{}
 		return true
 	}
@@ -697,20 +701,22 @@ func (e *Editor) operator(r rune) bool {
 	}
 	if e.mode.Visual() {
 		e.applyVisual(r)
+		e.screenColSet = false
 		return true
 	}
 	if e.pend.op == r {
 		line := e.cursor.Line
 		last := min(line+e.pend.count()-1, e.buf.LineCount()-1)
 		e.applyOperator(r, motion{target: Pos{last, 0}, kind: linewise})
+		e.screenColSet = false
 		e.pend = pending{}
 		return true
 	}
 	if e.pend.op != 0 {
+		e.screenColSet = false
 		e.pend = pending{}
 		return true
 	}
-	e.screenColSet = false
 	e.pend.op = r
 	return true
 }
@@ -850,7 +856,6 @@ func (e *Editor) resolveAwait(r rune) {
 			e.pend = pending{}
 		case 'U', 'u', '~':
 			// gU, gu and g~ are operators, so they wait for a motion next.
-			e.screenColSet = false
 			e.pend.op, _ = caseOp(r)
 		case 'v':
 			e.screenColSet = false
@@ -976,7 +981,6 @@ func (e *Editor) applyMotion(m motion) {
 	e.cursor = e.buf.Clamp(m.target)
 	e.clampCursor()
 	if e.applyingDisplayMotion {
-		e.desiredCol = e.cursor.Col
 		return
 	}
 	e.screenColSet = false
@@ -1146,7 +1150,9 @@ func (e *Editor) applyVisual(op rune) {
 
 // command runs the standalone normal-mode keys that take no motion.
 func (e *Editor) command(r rune) {
-	e.screenColSet = false
+	if r != 'v' && r != 'V' {
+		e.screenColSet = false
+	}
 	n := e.pend.count()
 
 	switch r {

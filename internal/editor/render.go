@@ -235,6 +235,7 @@ func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 			}
 		}
 		starts := indentedRowStarts(visible, width, indent)
+		lineCursorRow, lineCursorCol := cursorRowCol(runes, starts, cursor.Col, indent)
 		for k, s := range starts {
 			end := len(runes)
 			if k+1 < len(starts) {
@@ -244,19 +245,18 @@ func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 			if k > 0 {
 				rowIndent = indent
 			}
-			if i == cursor.Line {
-				if r, c := cursorRowCol(runes, starts, cursor.Col, indent); r == k {
-					cursorRow, cursorCol = len(rows), c+rowIndent
-				}
+			row := vrow{line: i, start: s, end: end, indent: rowIndent}
+			rows = append(rows, row)
+			if i != cursor.Line || lineCursorRow != k {
+				continue
 			}
-			rows = append(rows, vrow{line: i, start: s, end: end, indent: rowIndent})
-		}
-		if i == cursor.Line && e.mode == ModeInsert && cursor.Col == len(runes) {
-			last := rows[len(rows)-1]
-			if renderedRowWidth(runes, last.start, last.end, last.indent, width) == width {
+
+			cursorRow, cursorCol = len(rows)-1, lineCursorCol+rowIndent
+			if e.mode == ModeInsert && cursorCol >= width &&
+				renderedRowWidth(runes, row.start, row.end, row.indent, width) == width {
 				cursorRow, cursorCol = len(rows), indent
 				rows = append(rows, vrow{
-					line: i, start: len(runes), end: len(runes), indent: indent, synthetic: true,
+					line: i, start: cursor.Col, end: cursor.Col, indent: indent, synthetic: true,
 				})
 			}
 		}
@@ -303,7 +303,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 	}
 	for i := row.start; i < row.end && i < len(runes); i++ {
 		w := renderedRuneWidth(runes[i], col, width)
-		if w <= 0 {
+		if w < 0 {
 			break
 		}
 		style := washed(classStyles[lineClasses[i]], bg)
