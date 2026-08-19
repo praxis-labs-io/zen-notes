@@ -886,7 +886,7 @@ func TestHelpFitsWithoutClipping(t *testing.T) {
 				t.Errorf("%dx%d: help is missing the %s group", size[0], size[1], group)
 			}
 		}
-		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "cmd+c / paste", "tab shift+tab", "gx", "ZZ", "left down up right", "quote, paren, para", "same as h j k l"} {
+		for _, key := range []string{"iw aw", "; ,", "ctrl+v", "cmd+c / paste", "tab shift+tab", "gx", "gj gk", "ZZ", "display row", "quote, paren, para"} {
 			if !strings.Contains(out, key) {
 				t.Errorf("%dx%d: help is missing %q", size[0], size[1], key)
 			}

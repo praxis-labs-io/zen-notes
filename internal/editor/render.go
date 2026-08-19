@@ -184,6 +184,7 @@ func (e *Editor) Render(width, height int) Rendered {
 
 	gw := GutterWidth(e.buf.LineCount())
 	textWidth := max(width-gw, 1)
+	e.layoutWidth = textWidth
 
 	e.refreshMatches()
 	classes := classifyBuffer(e.buf)
@@ -216,6 +217,10 @@ func (e *Editor) Render(width, height int) Rendered {
 // layout wraps every line and reports where the cursor lands, as a row index
 // into the returned rows and a display column within that row.
 func (e *Editor) layout(width int) ([]vrow, int, int) {
+	return e.layoutAt(width, e.cursor)
+}
+
+func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 	var rows []vrow
 	cursorRow, cursorCol := 0, 0
 
@@ -225,8 +230,8 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 		visible := runes
 		if leadingSpaceEnd(runes) == len(runes) {
 			visible = nil
-			if i == e.cursor.Line {
-				visible = runes[:min(e.cursor.Col+1, len(runes))]
+			if i == cursor.Line {
+				visible = runes[:min(cursor.Col+1, len(runes))]
 			}
 		}
 		starts := indentedRowStarts(visible, width, indent)
@@ -239,14 +244,14 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 			if k > 0 {
 				rowIndent = indent
 			}
-			if i == e.cursor.Line {
-				if r, c := cursorRowCol(runes, starts, e.cursor.Col, indent); r == k {
+			if i == cursor.Line {
+				if r, c := cursorRowCol(runes, starts, cursor.Col, indent); r == k {
 					cursorRow, cursorCol = len(rows), c+rowIndent
 				}
 			}
 			rows = append(rows, vrow{line: i, start: s, end: end, indent: rowIndent})
 		}
-		if i == e.cursor.Line && e.mode == ModeInsert && e.cursor.Col == len(runes) {
+		if i == cursor.Line && e.mode == ModeInsert && cursor.Col == len(runes) {
 			last := rows[len(rows)-1]
 			if renderedRowWidth(runes, last.start, last.end, last.indent, width) == width {
 				cursorRow, cursorCol = len(rows), indent

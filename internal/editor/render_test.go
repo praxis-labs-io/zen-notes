@@ -335,6 +335,36 @@ func TestRenderCursorCountsDisplayWidth(t *testing.T) {
 	}
 }
 
+func TestDisplayLineMotionsUseRenderedColumns(t *testing.T) {
+	tests := []struct {
+		name         string
+		text         string
+		textWidth    int
+		beforeRender string
+		keys         string
+		want         Pos
+	}{
+		{"wide rune", "a界xabc", 4, "l", "gj", Pos{0, 4}},
+		{"tab", "\tabc", tabWidth, "", "gj", Pos{0, 1}},
+		{"hanging indent", "- abcdefgh", 6, "", "gjgj", Pos{0, 6}},
+		{"omitted separator", "abcd efgh", 4, "lll", "gj", Pos{0, 8}},
+		{"compacted whitespace", "abcd\n" + strings.Repeat(" ", 12) + "\nwxyz", 4, "", "2gj", Pos{2, 0}},
+		{"stale synthetic row", "abcd\nwxyz", 4, "A", "<esc>gj", Pos{1, 3}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			feed(t, e, tt.beforeRender)
+			e.Render(GutterWidth(e.buf.LineCount())+tt.textWidth, 12)
+			feed(t, e, tt.keys)
+			if got := e.Cursor(); got != tt.want {
+				t.Errorf("Cursor = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // The caret sits one past the last rune in insert mode, on the blank cell.
 func TestRenderCursorPastTheLastRune(t *testing.T) {
 	e := New("ab")

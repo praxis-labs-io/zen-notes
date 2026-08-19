@@ -52,7 +52,8 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 | | |
 |---|---|
-| `h j k l` | move |
+| `h j k l` | move by logical line |
+| `gj gk` | move by wrapped display row |
 | arrows | stand in for `hjkl`, counts and operators included |
 | `w W b B e E` | by word |
 | `0 ^ $` | line start, first non-blank, line end |

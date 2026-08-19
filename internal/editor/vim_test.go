@@ -693,6 +693,104 @@ func TestVerticalMotionRemembersColumn(t *testing.T) {
 	}
 }
 
+func TestDisplayLineMotions(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want Pos
+	}{
+		{"down within a logical line", "abcdefghijkl", "gj", Pos{0, 4}},
+		{"up within a logical line", "abcdefghijkl", "lllgjgk", Pos{0, 3}},
+		{"crosses logical lines", "abcd\nwxyz", "gj", Pos{1, 0}},
+		{"counted motion", "abcdefghijkl", "2gj", Pos{0, 8}},
+		{"repeated without another render", "abcdefghijkl", "gjgj", Pos{0, 8}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			e.Render(GutterWidth(e.buf.LineCount())+4, 10)
+			feed(t, e, tt.keys)
+			if got := e.Cursor(); got != tt.want {
+				t.Errorf("Cursor = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDisplayLineMotionPreservesScreenColumnAcrossShortRows(t *testing.T) {
+	e := New("abcdefghij")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(1)+4, 10)
+	feed(t, e, "gjgjgk")
+	if e.Cursor() != (Pos{0, 7}) {
+		t.Fatalf("Cursor = %v, want {0 7}", e.Cursor())
+	}
+}
+
+func TestDisplayLineMotionsTakeOperators(t *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		start string
+		keys  string
+		want  string
+	}{
+		{"delete down", "abcdefgh", "", "dgj", "efgh"},
+		{"delete up", "abcdefgh", "llll", "dgk", "efgh"},
+		{"change down", "abcdefgh", "", "cgjX<esc>", "Xefgh"},
+		{"yank down", "abcdefgh", "", "ygj$p", "abcdefghabcd"},
+		{"motion count", "abcdefghijkl", "", "d2gj", "ijkl"},
+		{"operator count", "abcdefghijkl", "", "2dgj", "ijkl"},
+		{"multiplied counts", "abcdefghijklmnopqrstuvwxyzAB", "", "2d3gj", "yzAB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			feed(t, e, tt.start)
+			e.Render(GutterWidth(1)+4, 10)
+			feed(t, e, tt.keys)
+			if got := e.Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDisplayLineMotionResetsItsScreenColumnAfterAnotherMotion(t *testing.T) {
+	e := New("abcdefghijkl")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(1)+4, 10)
+	feed(t, e, "gjhgj")
+	if e.Cursor() != (Pos{0, 10}) {
+		t.Fatalf("Cursor = %v, want {0 10}", e.Cursor())
+	}
+}
+
+func TestDisplayLineMotionExtendsVisualSelection(t *testing.T) {
+	e := New("abcdefgh")
+	e.Render(GutterWidth(1)+4, 10)
+	feed(t, e, "vgj")
+	from, to, linewise := e.Selection()
+	if from != (Pos{0, 0}) || to != (Pos{0, 4}) || linewise {
+		t.Fatalf("Selection = %v, %v, %v; want {0 0}, {0 4}, false", from, to, linewise)
+	}
+}
+
+func TestDisplayLineMotionBeforeRenderFallsBackToLogicalLines(t *testing.T) {
+	e := run(t, "one\ntwo", "gj")
+	if e.Cursor() != (Pos{1, 0}) {
+		t.Fatalf("Cursor = %v, want {1 0}", e.Cursor())
+	}
+
+	e = run(t, "one\ntwo", "dgj")
+	if e.Text() != "two" {
+		t.Fatalf("Text = %q, want two", e.Text())
+	}
+}
+
 func TestDeleteOperators(t *testing.T) {
 	tests := []struct {
 		name string

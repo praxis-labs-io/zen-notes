@@ -1,5 +1,41 @@
 package editor
 
+func (e *Editor) applyDisplayMotion(delta, count int) {
+	e.applyingDisplayMotion = true
+	e.applyMotion(e.displayMotion(delta, count))
+	e.applyingDisplayMotion = false
+}
+
+// displayMotion resolves gj and gk against freshly computed visual rows.
+func (e *Editor) displayMotion(delta, count int) motion {
+	if e.layoutWidth <= 0 {
+		line := min(max(e.cursor.Line+delta*count, 0), e.buf.LineCount()-1)
+		return motion{target: Pos{line, e.desiredCol}, kind: charExclusive}
+	}
+
+	pos := e.cursor
+	goal, hasGoal := e.desiredScreenCol, e.screenColSet
+	for range count {
+		rows, cursorRow, cursorCol := e.layoutAt(e.layoutWidth, pos)
+		if !hasGoal {
+			goal = min(cursorCol, e.layoutWidth-1)
+			hasGoal = true
+		}
+
+		targetRow := cursorRow + delta
+		for targetRow >= 0 && targetRow < len(rows) && rows[targetRow].synthetic {
+			targetRow += delta
+		}
+		if targetRow < 0 || targetRow >= len(rows) {
+			break
+		}
+		row := rows[targetRow]
+		pos = Pos{row.line, screenColumnToRune(e.buf.runes(row.line), row, goal, e.layoutWidth)}
+	}
+	e.desiredScreenCol, e.screenColSet = goal, hasGoal
+	return motion{target: pos, kind: charExclusive}
+}
+
 // Top is the first visual row on screen, as of the last Render.
 func (e *Editor) Top() int { return e.top }
 

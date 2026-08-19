@@ -156,6 +156,33 @@ func cursorRowCol(runes []rune, starts []int, col, indent int) (int, int) {
 	return row, width - base
 }
 
+// screenColumnToRune maps a display column on a visual row to a real rune.
+func screenColumnToRune(runes []rune, row vrow, desired, width int) int {
+	if len(runes) == 0 {
+		return 0
+	}
+	if desired < row.indent {
+		return min(row.start, len(runes)-1)
+	}
+
+	col, last := row.indent, -1
+	for i := row.start; i < row.end && i < len(runes); i++ {
+		w := renderedRuneWidth(runes[i], col, width)
+		if w <= 0 {
+			break
+		}
+		last = i
+		if desired < col+w {
+			return i
+		}
+		col += w
+	}
+	if last >= 0 {
+		return last
+	}
+	return min(row.start, len(runes)-1)
+}
+
 // scrollTo returns the top row that keeps the cursor row inside a window of
 // the given height.
 func scrollTo(top, cursorRow, height int) int {
