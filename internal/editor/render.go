@@ -187,9 +187,13 @@ func (e *Editor) Render(width, height int) Rendered {
 
 	e.refreshMatches()
 	classes := classifyBuffer(e.buf)
+	oldRowCount := len(e.rows)
 	rows, cursorRow, cursorCol := e.layout(textWidth)
 	e.rows, e.cursorRow = rows, cursorRow
 	e.top = scrollTo(e.top, cursorRow, height)
+	if len(rows) < oldRowCount {
+		e.top = min(e.top, max(len(rows)-height, 0))
+	}
 
 	var out []string
 	for i := e.top; i < e.top+height; i++ {
@@ -218,7 +222,14 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 	for i := range e.buf.LineCount() {
 		runes := e.buf.runes(i)
 		indent := continuationIndent(runes, width)
-		starts := indentedRowStarts(runes, width, indent)
+		visible := runes
+		if leadingSpaceEnd(runes) == len(runes) {
+			visible = nil
+			if i == e.cursor.Line {
+				visible = runes[:min(e.cursor.Col+1, len(runes))]
+			}
+		}
+		starts := indentedRowStarts(visible, width, indent)
 		for k, s := range starts {
 			end := len(runes)
 			if k+1 < len(starts) {

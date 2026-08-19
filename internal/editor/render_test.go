@@ -227,6 +227,103 @@ func TestRenderCursorIsRelativeToTheScrolledWindow(t *testing.T) {
 	}
 }
 
+func TestWhitespaceOnlyLinesUseOnlyRequiredRows(t *testing.T) {
+	tests := []struct {
+		name          string
+		text          string
+		cursor        Pos
+		wantCursorRow int
+		wantAfterRow  int
+	}{
+		{"inactive spaces above", strings.Repeat(" ", 16) + "\nafter", Pos{1, 0}, 1, 1},
+		{"inactive spaces below", "bef\n" + strings.Repeat(" ", 16) + "\nafter", Pos{0, 0}, 0, 2},
+		{"active spaces at start", strings.Repeat(" ", 12) + "\nafter", Pos{0, 0}, 0, 1},
+		{"active spaces at tail", strings.Repeat(" ", 12) + "\nafter", Pos{0, 11}, 3, 4},
+		{"inactive tabs above", "\t\t\t\nafter", Pos{1, 0}, 1, 1},
+		{"active tabs at tail", "\t\t\t\nafter", Pos{0, 2}, 2, 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			e.SetCursor(tt.cursor)
+			gw := GutterWidth(e.buf.LineCount())
+			got := e.Render(gw+4, 12)
+			if got.CursorRow != tt.wantCursorRow {
+				t.Errorf("cursor row = %d, want %d", got.CursorRow, tt.wantCursorRow)
+			}
+			rows := strings.Split(ansi.Strip(got.Content), "\n")
+			if !strings.Contains(rows[tt.wantAfterRow], "afte") {
+				t.Errorf("row %d = %q, want the following line", tt.wantAfterRow, rows[tt.wantAfterRow])
+			}
+			if e.Text() != tt.text {
+				t.Errorf("Text = %q, want unchanged %q", e.Text(), tt.text)
+			}
+			for i, row := range strings.Split(got.Content, "\n") {
+				if width := ansi.StringWidth(row); width > gw+4 {
+					t.Errorf("row %d is %d cells wide, want at most %d", i, width, gw+4)
+				}
+			}
+		})
+	}
+}
+
+func TestWhitespaceTailExpandsForEditing(t *testing.T) {
+	spaces := strings.Repeat(" ", 12)
+	e := New(spaces + "\nafter")
+	feed(t, e, "$aX")
+
+	if e.Text() != spaces+"X\nafter" {
+		t.Fatalf("Text = %q, want insertion at the real whitespace tail", e.Text())
+	}
+	if e.Cursor() != (Pos{0, 13}) {
+		t.Fatalf("Cursor = %v, want the position after the inserted rune", e.Cursor())
+	}
+	if got := ansi.Strip(e.Render(GutterWidth(2)+4, 8).Content); !strings.Contains(got, "X") {
+		t.Fatalf("inserted tail is not visible: %q", got)
+	}
+}
+
+func TestWhitespaceCompactionClampsAStaleViewport(t *testing.T) {
+	e := New(strings.Repeat(" ", 40) + "\nafter")
+	gw := GutterWidth(2)
+	e.SetCursor(Pos{0, 39})
+	e.Render(gw+4, 3)
+
+	e.SetCursor(Pos{1, 0})
+	got := e.Render(gw+4, 3)
+	if e.Top() != 0 || got.CursorRow != 1 {
+		t.Fatalf("top, cursor row = %d, %d; want 0, 1", e.Top(), got.CursorRow)
+	}
+	rows := strings.Split(ansi.Strip(got.Content), "\n")
+	if !strings.HasPrefix(rows[0], " 1 ") || !strings.HasPrefix(rows[1], " 2 afte") {
+		t.Fatalf("hybrid gutters after compaction = %q", rows[:2])
+	}
+}
+
+func TestWhitespaceCompactionKeepsScreenMotionsOnVisibleLines(t *testing.T) {
+	e := New("one\n" + strings.Repeat(" ", 16) + "\ntwo\nthree")
+	e.SetHeight(3)
+	e.Render(GutterWidth(4)+4, 3)
+	feed(t, e, "L")
+	if e.Cursor().Line != 2 {
+		t.Fatalf("L moved to line %d, want visible line 2", e.Cursor().Line)
+	}
+}
+
+func TestWhitespaceCompactionKeepsVisualLineSelection(t *testing.T) {
+	e := New(strings.Repeat(" ", 16) + "\nafter")
+	e.SetBackground(navy)
+	feed(t, e, "Vj")
+	rows := renderRows(e, GutterWidth(2)+4, 3)
+	if !isLit(rows[0]) || !isLit(rows[1]) {
+		t.Fatalf("compacted selection is not visible: %q", rows[:2])
+	}
+	if !strings.Contains(ansi.Strip(rows[1]), "afte") {
+		t.Fatalf("following line did not move next to compacted whitespace: %q", ansi.Strip(rows[1]))
+	}
+}
+
 func TestRenderCursorCountsDisplayWidth(t *testing.T) {
 	e := New("日本x")
 	feed(t, e, "ll")
