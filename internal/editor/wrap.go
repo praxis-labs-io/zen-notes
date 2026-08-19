@@ -91,6 +91,30 @@ func runeWidthAt(r rune, col int) int {
 	return runewidth.RuneWidth(r)
 }
 
+// renderedRowWidth measures the cells renderRow can draw from one visual row.
+func renderedRowWidth(runes []rune, start, end, indent, width int) int {
+	col := indent
+	for i := start; i < end && i < len(runes); i++ {
+		w := renderedRuneWidth(runes[i], col, width)
+		if w <= 0 {
+			break
+		}
+		col += w
+	}
+	return col
+}
+
+func renderedRuneWidth(r rune, col, width int) int {
+	w := runeWidthAt(r, col)
+	if col+w <= width {
+		return w
+	}
+	if r == '\t' {
+		return width - col
+	}
+	return 0
+}
+
 func leadingSpaceEnd(runes []rune) int {
 	end := 0
 	for end < len(runes) && (runes[end] == ' ' || runes[end] == '\t') {

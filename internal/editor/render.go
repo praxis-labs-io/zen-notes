@@ -168,11 +168,12 @@ type Rendered struct {
 	CursorCol int
 }
 
-// vrow is one wrapped screen row: a slice of a logical line.
+// vrow is one wrapped screen row, including caret-only synthetic rows.
 type vrow struct {
 	line       int
 	start, end int
 	indent     int
+	synthetic  bool
 }
 
 // Render draws height rows of the buffer, scrolling to keep the caret in
@@ -199,7 +200,7 @@ func (e *Editor) Render(width, height int) Rendered {
 		row := rows[i]
 		bg := e.cursorLineBG(row.line)
 		text, used := e.renderRow(row, classes, textWidth, bg)
-		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0, bg)+text+trail(bg, textWidth-used))
+		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0 && !row.synthetic, bg)+text+trail(bg, textWidth-used))
 	}
 	return Rendered{
 		Content:   strings.Join(out, "\n"),
@@ -233,6 +234,15 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 				}
 			}
 			rows = append(rows, vrow{line: i, start: s, end: end, indent: rowIndent})
+		}
+		if i == e.cursor.Line && e.mode == ModeInsert && e.cursor.Col == len(runes) {
+			last := rows[len(rows)-1]
+			if renderedRowWidth(runes, last.start, last.end, last.indent, width) == width {
+				cursorRow, cursorCol = len(rows), indent
+				rows = append(rows, vrow{
+					line: i, start: len(runes), end: len(runes), indent: indent, synthetic: true,
+				})
+			}
 		}
 	}
 	return rows, cursorRow, cursorCol
@@ -276,14 +286,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 		sb.WriteString(style.Render(strings.Repeat(" ", row.indent)))
 	}
 	for i := row.start; i < row.end && i < len(runes); i++ {
-		w := runeWidthAt(runes[i], col)
-		if col+w > width {
-			if runes[i] == '\t' {
-				w = width - col
-			} else {
-				break
-			}
-		}
+		w := renderedRuneWidth(runes[i], col, width)
 		if w <= 0 {
 			break
 		}

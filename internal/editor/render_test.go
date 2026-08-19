@@ -250,6 +250,57 @@ func TestRenderCursorPastTheLastRune(t *testing.T) {
 	}
 }
 
+func TestRenderCursorAtAnExactRightEdge(t *testing.T) {
+	tests := []struct {
+		name          string
+		text          string
+		textWidth     int
+		wantNormalRow int
+		wantNormalCol int
+		wantInsertRow int
+		wantInsertCol int
+	}{
+		{"ASCII", "abcd", 4, 0, 3, 1, 0},
+		{"wide final rune", "ab界", 4, 0, 2, 1, 0},
+		{"tab boundary", "a\t", tabWidth, 0, 1, 1, 0},
+		{"omitted trailing separator", "abcd ", 4, 0, 3, 1, 0},
+		{"hanging indent", "- abcdefgh", 6, 2, 5, 3, 2},
+		{"one-cell text area", "x", 1, 0, 0, 1, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := GutterWidth(1)
+			width := gw + tt.textWidth
+
+			normal := run(t, tt.text, "$").Render(width, 10)
+			if normal.CursorRow != tt.wantNormalRow || normal.CursorCol != gw+tt.wantNormalCol {
+				t.Errorf("normal cursor = %d, %d; want %d, %d", normal.CursorRow, normal.CursorCol, tt.wantNormalRow, gw+tt.wantNormalCol)
+			}
+			for i, row := range strings.Split(normal.Content, "\n") {
+				if got := ansi.StringWidth(row); got > width {
+					t.Errorf("normal row %d is %d cells wide, want at most %d", i, got, width)
+				}
+			}
+
+			insert := run(t, tt.text, "A").Render(width, 10)
+			if insert.CursorRow != tt.wantInsertRow || insert.CursorCol != gw+tt.wantInsertCol {
+				t.Errorf("insert cursor = %d, %d; want %d, %d", insert.CursorRow, insert.CursorCol, tt.wantInsertRow, gw+tt.wantInsertCol)
+			}
+
+			rows := strings.Split(ansi.Strip(insert.Content), "\n")
+			if gutter := rows[tt.wantInsertRow][:gw]; strings.TrimSpace(gutter) != "" {
+				t.Errorf("synthetic row gutter = %q, want blank", gutter)
+			}
+			for i, row := range strings.Split(insert.Content, "\n") {
+				if got := ansi.StringWidth(row); got > width {
+					t.Errorf("row %d is %d cells wide, want at most %d", i, got, width)
+				}
+			}
+		})
+	}
+}
+
 func TestRenderNoLongerPaintsTheCursor(t *testing.T) {
 	got := New("hello").Render(20, 10)
 
