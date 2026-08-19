@@ -58,6 +58,8 @@ func TestClassifyLine(t *testing.T) {
 		{"blockquote", "> quote", "MM....."},
 		{"unchecked box", "- [ ] task", "MMOOO....."},
 		{"checked box", "- [x] task", "MMXXX....."},
+		{"ordered unchecked box", "1. [ ] task", "MMMOOO....."},
+		{"ordered checked box", "2) [x] task", "MMMXXX....."},
 		{"bare unchecked box", "[ ] task", "OOO....."},
 		{"indented bare unchecked box", "  [ ] task", "..OOO....."},
 		{"indented bare checked box", "  [x] task", "..XXX....."},

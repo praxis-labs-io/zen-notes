@@ -91,6 +91,12 @@ func markLinePrefix(runes []rune, classes []tokenClass) int {
 			markCheckbox(runes, classes, item.taskAt)
 			return item.contentStart
 		}
+		if hasTaskMarker(runes, item.contentStart) {
+			if contentStart, ok := skipRequiredSpace(runes, item.contentStart+3); ok {
+				markCheckbox(runes, classes, item.contentStart)
+				return contentStart
+			}
+		}
 		return item.markerEnd
 	}
 
