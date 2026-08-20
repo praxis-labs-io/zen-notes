@@ -20,10 +20,8 @@ const (
 
 var (
 	headingRe  = regexp.MustCompile(`^\s*#{1,6}\s`)
-	bulletRe   = regexp.MustCompile(`^(\s*)([-*+]|\d+\.)(\s)`)
 	quoteRe    = regexp.MustCompile(`^(\s*)(>+)(\s)`)
 	fenceRe    = regexp.MustCompile("^\\s*(```|~~~)")
-	checkboxRe = regexp.MustCompile(`^\[( |x|X)\]`)
 	strongRe   = regexp.MustCompile(`\*\*[^*\n]+\*\*|__[^_\n]+__`)
 	emphasisRe = regexp.MustCompile(`\*[^*\n]+\*|_[^_\n]+_`)
 	codeRe     = regexp.MustCompile("`[^`\n]*`")
@@ -84,26 +82,45 @@ func classifyLine(runes []rune, inFence bool) []tokenClass {
 // markLinePrefix labels bullets, quote markers and checkboxes, returning the
 // rune index where ordinary text begins.
 func markLinePrefix(runes []rune, classes []tokenClass) int {
+	item, isList := parseListLine(runes)
+	if isList {
+		if item.markerEnd > item.indent {
+			fill(classes, item.indent, item.markerEnd, tokMarker)
+		}
+		if item.task {
+			markCheckbox(runes, classes, item.taskAt)
+			return item.contentStart
+		}
+		if hasTaskMarker(runes, item.contentStart) {
+			if contentStart, ok := skipRequiredSpace(runes, item.contentStart+3); ok {
+				markCheckbox(runes, classes, item.contentStart)
+				return contentStart
+			}
+		}
+		return item.markerEnd
+	}
+
 	line := string(runes)
 	start := 0
-
-	if m := bulletRe.FindStringSubmatchIndex(line); m != nil {
-		start = runeLen(line[:m[1]])
-		fill(classes, runeLen(line[:m[4]]), start, tokMarker)
-	} else if m := quoteRe.FindStringSubmatchIndex(line); m != nil {
+	if m := quoteRe.FindStringSubmatchIndex(line); m != nil {
 		start = runeLen(line[:m[1]])
 		fill(classes, runeLen(line[:m[4]]), start, tokMarker)
 	}
-
-	if m := checkboxRe.FindStringSubmatch(string(runes[start:])); m != nil {
-		class := tokCheckTodo
-		if m[1] != " " {
-			class = tokCheckDone
+	if hasTaskMarker(runes, start) {
+		if contentStart, ok := skipRequiredSpace(runes, start+3); ok {
+			markCheckbox(runes, classes, start)
+			return contentStart
 		}
-		fill(classes, start, start+3, class)
-		start += 3
 	}
 	return start
+}
+
+func markCheckbox(runes []rune, classes []tokenClass, at int) {
+	class := tokCheckTodo
+	if runes[at+1] != ' ' {
+		class = tokCheckDone
+	}
+	fill(classes, at, at+3, class)
 }
 
 // markInline styles each pattern over only the still-plain runs, so a star

@@ -254,6 +254,14 @@ func TestSmartEnterUsesMarkdownContext(t *testing.T) {
 		{"ordered list increments", "", "i9. one<cr>two<esc>", "9. one\n10. two"},
 		{"parenthesized list increments", "", "i2) one<cr>two<esc>", "2) one\n3) two"},
 		{"task list resets", "", "i- [x] done<cr>next<esc>", "- [x] done\n- [ ] next"},
+		{"bare task continues", "", "i[ ] one<cr>two<esc>", "[ ] one\n[ ] two"},
+		{"checked bare task resets", "", "i[x] done<cr>next<esc>", "[x] done\n[ ] next"},
+		{"uppercase checked bare task resets", "", "i[X] done<cr>next<esc>", "[X] done\n[ ] next"},
+		{"bare task indentation is preserved", "  [ ] one", "A<cr>two<esc>", "  [ ] one\n  [ ] two"},
+		{"bare task continues unicode content", "", "i[ ] 日本語<cr>続き<esc>", "[ ] 日本語\n[ ] 続き"},
+		{"bare task accepts Unicode separator", "", "i[ ] one<cr>two<esc>", "[ ] one\n[ ] two"},
+		{"malformed bare task splits normally", "", "i[ ]task<cr>next<esc>", "[ ]task\nnext"},
+		{"malformed task remains a bullet", "", "i- [ ]task<cr>next<esc>", "- [ ]task\n- next"},
 		{"indentation is preserved", "  - one", "A<cr>two<esc>", "  - one\n  - two"},
 		{"unicode content continues", "", "i- 日本語<cr>続き<esc>", "- 日本語\n- 続き"},
 	}
@@ -278,7 +286,9 @@ func TestStartingAListSeparatesItFromProse(t *testing.T) {
 		{"keeps an existing separator", "Prose\n\n", "Gi- item<esc>", "Prose\n\n- item"},
 		{"separates an ordered list", "Prose\n", "Gi1. item<esc>", "Prose\n\n1. item"},
 		{"separates a task list", "Prose\n", "Gi- [ ] item<esc>", "Prose\n\n- [ ] item"},
+		{"separates a bare task", "Prose\n", "Gi[ ] item<esc>", "Prose\n\n[ ] item"},
 		{"keeps adjacent list items together", "- one\n", "Gi- two<esc>", "- one\n- two"},
+		{"keeps adjacent bare tasks together", "[ ] one\n", "Gi[x] two<esc>", "[ ] one\n[x] two"},
 	}
 
 	for _, tt := range tests {
@@ -299,6 +309,7 @@ func TestEnterOnEmptyListItemExitsTheList(t *testing.T) {
 		{"unordered", "i- one<cr><cr>body<esc>", "- one\n\nbody"},
 		{"ordered", "i1. one<cr><cr>body<esc>", "1. one\n\nbody"},
 		{"task", "i- [ ] one<cr><cr>body<esc>", "- [ ] one\n\nbody"},
+		{"bare task", "i[ ] one<cr><cr>body<esc>", "[ ] one\n\nbody"},
 	}
 
 	for _, tt := range tests {
@@ -318,6 +329,7 @@ func TestBackspaceAfterEmptyListMarkerExitsTheList(t *testing.T) {
 		{"unordered", "i- <bs>body<esc>"},
 		{"ordered", "i1. <bs>body<esc>"},
 		{"task", "i- [ ] <bs>body<esc>"},
+		{"bare task", "i[ ] <bs>body<esc>"},
 	}
 
 	for _, tt := range tests {
@@ -330,9 +342,21 @@ func TestBackspaceAfterEmptyListMarkerExitsTheList(t *testing.T) {
 }
 
 func TestBackspaceExitingAListLeavesASeparator(t *testing.T) {
-	e := run(t, "- one\n- ", "GA<bs>body<esc>")
-	if e.Text() != "- one\n\nbody" {
-		t.Fatalf("Text = %q, want a blank line before body", e.Text())
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"bullet", "- one\n- ", "- one\n\nbody"},
+		{"bare task", "[ ] one\n[ ] ", "[ ] one\n\nbody"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, "GA<bs>body<esc>")
+			if e.Text() != tt.want {
+				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
+			}
+		})
 	}
 }
 
@@ -345,6 +369,7 @@ func TestTabNestsListItems(t *testing.T) {
 		{"unordered", "- one\n- two", "- one\n  - two"},
 		{"ordered", "1. one\n2. two", "1. one\n  2. two"},
 		{"task", "- [ ] one\n- [x] two", "- [ ] one\n  - [x] two"},
+		{"bare task", "[ ] one\n[x] two", "[ ] one\n  [x] two"},
 	}
 
 	for _, tt := range tests {
@@ -357,10 +382,28 @@ func TestTabNestsListItems(t *testing.T) {
 }
 
 func TestTabMovesTheWholeListSubtree(t *testing.T) {
-	text := "- one\n- two\n  - child\n    - grandchild\n- three"
-	want := "- one\n  - two\n    - child\n      - grandchild\n- three"
-	if got := run(t, text, "jA<tab><esc>").Text(); got != want {
-		t.Fatalf("Text = %q, want %q", got, want)
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			"bullet",
+			"- one\n- two\n  - child\n    - grandchild\n- three",
+			"- one\n  - two\n    - child\n      - grandchild\n- three",
+		},
+		{
+			"bare task",
+			"[ ] one\n[x] two\n  - child\n    continuation\n[ ] three",
+			"[ ] one\n  [x] two\n    - child\n      continuation\n[ ] three",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, tt.text, "jA<tab><esc>").Text(); got != tt.want {
+				t.Fatalf("Text = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -437,12 +480,14 @@ func TestShiftTabStopsAtTheTopLevel(t *testing.T) {
 }
 
 func TestTabRemainsLiteralOutsideAList(t *testing.T) {
-	e := run(t, "body", "A<tab><esc>")
-	if e.Text() != "body\t" {
-		t.Fatalf("Text = %q, want a literal tab", e.Text())
+	for _, text := range []string{"body", "[ ]task", "[y] task", "[] task"} {
+		e := run(t, text, "A<tab><esc>")
+		if e.Text() != text+"\t" {
+			t.Errorf("Text = %q, want a literal tab after %q", e.Text(), text)
+		}
 	}
 
-	e = run(t, "body", "A<backtab><esc>")
+	e := run(t, "body", "A<backtab><esc>")
 	if e.Text() != "body" {
 		t.Fatalf("Shift-Tab changed non-list text to %q", e.Text())
 	}
@@ -457,6 +502,7 @@ func TestEmptyNestedItemDedentsOnEnter(t *testing.T) {
 		{"unordered", "- parent\n  - ", "- parent\n- "},
 		{"ordered", "1. parent\n  2. ", "1. parent\n2. "},
 		{"task", "- [ ] parent\n  - [ ] ", "- [ ] parent\n- [ ] "},
+		{"bare task", "[ ] parent\n  [ ] ", "[ ] parent\n[ ] "},
 		{"one level at a time", "- parent\n    - ", "- parent\n  - "},
 	}
 
@@ -478,6 +524,7 @@ func TestEmptyNestedItemDedentsOnBackspace(t *testing.T) {
 		{"unordered", "- parent\n  - ", "- parent\n- "},
 		{"ordered", "1. parent\n  2. ", "1. parent\n2. "},
 		{"task", "- [ ] parent\n  - [ ] ", "- [ ] parent\n- [ ] "},
+		{"bare task", "[ ] parent\n  [ ] ", "[ ] parent\n[ ] "},
 	}
 
 	for _, tt := range tests {
@@ -490,21 +537,43 @@ func TestEmptyNestedItemDedentsOnBackspace(t *testing.T) {
 }
 
 func TestEmptyNestedItemExitsAfterReachingTopLevel(t *testing.T) {
-	e := run(t, "- parent\n  - ", "GA<cr><cr>body<esc>")
-	if e.Text() != "- parent\n\nbody" {
-		t.Fatalf("Text = %q, want a blank line before body", e.Text())
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"bullet", "- parent\n  - ", "- parent\n\nbody"},
+		{"bare task", "[ ] parent\n  [ ] ", "[ ] parent\n\nbody"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, "GA<cr><cr>body<esc>")
+			if e.Text() != tt.want {
+				t.Fatalf("Text = %q, want %q", e.Text(), tt.want)
+			}
+		})
 	}
 }
 
 func TestListIndentKeepsCursorWithTheContent(t *testing.T) {
-	e := run(t, "- one\n- two", "jA<tab>")
-	if e.Cursor() != (Pos{1, 7}) {
-		t.Fatalf("Cursor = %v, want {1 7}", e.Cursor())
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want Pos
+	}{
+		{"nest bullet", "- one\n- two", "jA<tab>", Pos{1, 7}},
+		{"dedent bullet", "- one\n  - two", "jA<backtab>", Pos{1, 5}},
+		{"nest bare task", "[ ] one\n[ ] two", "jA<tab>", Pos{1, 9}},
+		{"dedent bare task", "[ ] one\n  [ ] two", "jA<backtab>", Pos{1, 7}},
 	}
-
-	e = run(t, "- one\n  - two", "jA<backtab>")
-	if e.Cursor() != (Pos{1, 5}) {
-		t.Fatalf("Cursor = %v, want {1 5}", e.Cursor())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := run(t, tt.text, tt.keys)
+			if e.Cursor() != tt.want {
+				t.Fatalf("Cursor = %v, want %v", e.Cursor(), tt.want)
+			}
+		})
 	}
 }
 
@@ -690,6 +759,147 @@ func TestVerticalMotionRemembersColumn(t *testing.T) {
 	e := run(t, "abcd\na\nabcd", "$jj")
 	if e.Cursor() != (Pos{2, 3}) {
 		t.Fatalf("Cursor = %v, want {2 3}", e.Cursor())
+	}
+}
+
+func TestDisplayLineMotions(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		keys string
+		want Pos
+	}{
+		{"down within a logical line", "abcdefghijkl", "gj", Pos{0, 4}},
+		{"up within a logical line", "abcdefghijkl", "lllgjgk", Pos{0, 3}},
+		{"crosses logical lines", "abcd\nwxyz", "gj", Pos{1, 0}},
+		{"counted motion", "abcdefghijkl", "2gj", Pos{0, 8}},
+		{"repeated without another render", "abcdefghijkl", "gjgj", Pos{0, 8}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			e.Render(GutterWidth(e.buf.LineCount())+4, 10)
+			feed(t, e, tt.keys)
+			if got := e.Cursor(); got != tt.want {
+				t.Errorf("Cursor = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDisplayLineMotionPreservesScreenColumnAcrossShortRows(t *testing.T) {
+	e := New("abcdefghij")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(1)+4, 10)
+	feed(t, e, "gjgjgk")
+	if e.Cursor() != (Pos{0, 7}) {
+		t.Fatalf("Cursor = %v, want {0 7}", e.Cursor())
+	}
+}
+
+func TestDisplayLineMotionsTakeOperators(t *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		start string
+		keys  string
+		want  string
+	}{
+		{"delete down", "abcdefgh", "", "dgj", "efgh"},
+		{"delete up", "abcdefgh", "llll", "dgk", "efgh"},
+		{"change down", "abcdefgh", "", "cgjX<esc>", "Xefgh"},
+		{"yank down", "abcdefgh", "", "ygj$p", "abcdefghabcd"},
+		{"motion count", "abcdefghijkl", "", "d2gj", "ijkl"},
+		{"operator count", "abcdefghijkl", "", "2dgj", "ijkl"},
+		{"multiplied counts", "abcdefghijklmnopqrstuvwxyzAB", "", "2d3gj", "yzAB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(tt.text)
+			feed(t, e, tt.start)
+			e.Render(GutterWidth(1)+4, 10)
+			feed(t, e, tt.keys)
+			if got := e.Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDisplayLineMotionResetsItsScreenColumnAfterAnotherMotion(t *testing.T) {
+	e := New("abcdefghijkl")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(1)+4, 10)
+	feed(t, e, "gjhgj")
+	if e.Cursor() != (Pos{0, 10}) {
+		t.Fatalf("Cursor = %v, want {0 10}", e.Cursor())
+	}
+}
+
+func TestDisplayLineMotionExtendsVisualSelection(t *testing.T) {
+	e := New("abcdefgh")
+	e.Render(GutterWidth(1)+4, 10)
+	feed(t, e, "vgj")
+	from, to, linewise := e.Selection()
+	if from != (Pos{0, 0}) || to != (Pos{0, 4}) || linewise {
+		t.Fatalf("Selection = %v, %v, %v; want {0 0}, {0 4}, false", from, to, linewise)
+	}
+}
+
+func TestDisplayLineMotionBeforeRenderFallsBackToLogicalLines(t *testing.T) {
+	e := run(t, "one\ntwo", "gj")
+	if e.Cursor() != (Pos{1, 0}) {
+		t.Fatalf("Cursor = %v, want {1 0}", e.Cursor())
+	}
+
+	e = run(t, "one\ntwo", "dgj")
+	if e.Text() != "two" {
+		t.Fatalf("Text = %q, want two", e.Text())
+	}
+}
+
+func TestDisplayLineFallbackPreservesColumnsAndClampsOperators(t *testing.T) {
+	e := run(t, "abcd\na\nabcd", "$gjgj")
+	if e.Cursor() != (Pos{2, 3}) {
+		t.Fatalf("Cursor = %v, want {2 3}", e.Cursor())
+	}
+
+	tests := []struct {
+		name string
+		keys string
+		want string
+	}{
+		{"delete", "$dgj", "abcx"},
+		{"change", "$cgjZ<esc>", "abcZx"},
+		{"yank", "$ygj", "abcd\nx"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := run(t, "abcd\nx", tt.keys).Text(); got != tt.want {
+				t.Errorf("Text = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDisplayLinePrefixesPreserveAnEstablishedScreenColumn(t *testing.T) {
+	e := New("abcdefghij\nabcd")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(2)+4, 10)
+	feed(t, e, "gjgjdgj")
+	if e.Text() != "abcdefghid" {
+		t.Fatalf("Text = %q, want abcdefghid", e.Text())
+	}
+
+	e = New("abcdefghij\nabcd")
+	feed(t, e, "lll")
+	e.Render(GutterWidth(2)+4, 10)
+	feed(t, e, "gjgjvgj")
+	from, to, linewise := e.Selection()
+	if from != (Pos{0, 9}) || to != (Pos{1, 3}) || linewise {
+		t.Fatalf("Selection = %v, %v, %v; want {0 9}, {1 3}, false", from, to, linewise)
 	}
 }
 
@@ -1255,6 +1465,16 @@ func TestScrollPositioningKeepsTheCursorLine(t *testing.T) {
 	feed(t, e, "zz")
 	if e.Cursor().Line != 20 {
 		t.Fatalf("cursor line = %d, want 20", e.Cursor().Line)
+	}
+}
+
+func TestScrollPositioningUsesFreshWrappedCursorRow(t *testing.T) {
+	e := New("abcdefghijkl")
+	e.SetHeight(3)
+	e.Render(GutterWidth(1)+4, 3)
+	feed(t, e, "gjzt")
+	if e.Top() != 1 {
+		t.Fatalf("top = %d, want wrapped cursor row 1", e.Top())
 	}
 }
 

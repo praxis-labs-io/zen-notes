@@ -168,11 +168,12 @@ type Rendered struct {
 	CursorCol int
 }
 
-// vrow is one wrapped screen row: a slice of a logical line.
+// vrow is one wrapped screen row, including caret-only synthetic rows.
 type vrow struct {
 	line       int
 	start, end int
 	indent     int
+	synthetic  bool
 }
 
 // Render draws height rows of the buffer, scrolling to keep the caret in
@@ -183,12 +184,17 @@ func (e *Editor) Render(width, height int) Rendered {
 
 	gw := GutterWidth(e.buf.LineCount())
 	textWidth := max(width-gw, 1)
+	e.layoutWidth = textWidth
 
 	e.refreshMatches()
 	classes := classifyBuffer(e.buf)
+	oldRowCount := len(e.rows)
 	rows, cursorRow, cursorCol := e.layout(textWidth)
 	e.rows, e.cursorRow = rows, cursorRow
 	e.top = scrollTo(e.top, cursorRow, height)
+	if len(rows) < oldRowCount {
+		e.top = min(e.top, max(len(rows)-height, 0))
+	}
 
 	var out []string
 	for i := e.top; i < e.top+height; i++ {
@@ -199,7 +205,7 @@ func (e *Editor) Render(width, height int) Rendered {
 		row := rows[i]
 		bg := e.cursorLineBG(row.line)
 		text, used := e.renderRow(row, classes, textWidth, bg)
-		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0, bg)+text+trail(bg, textWidth-used))
+		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0 && !row.synthetic, bg)+text+trail(bg, textWidth-used))
 	}
 	return Rendered{
 		Content:   strings.Join(out, "\n"),
@@ -211,13 +217,25 @@ func (e *Editor) Render(width, height int) Rendered {
 // layout wraps every line and reports where the cursor lands, as a row index
 // into the returned rows and a display column within that row.
 func (e *Editor) layout(width int) ([]vrow, int, int) {
+	return e.layoutAt(width, e.cursor)
+}
+
+func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 	var rows []vrow
 	cursorRow, cursorCol := 0, 0
 
 	for i := range e.buf.LineCount() {
 		runes := e.buf.runes(i)
 		indent := continuationIndent(runes, width)
-		starts := indentedRowStarts(runes, width, indent)
+		visible := runes
+		if leadingSpaceEnd(runes) == len(runes) {
+			visible = nil
+			if i == cursor.Line {
+				visible = runes[:min(cursor.Col+1, len(runes))]
+			}
+		}
+		starts := indentedRowStarts(visible, width, indent)
+		lineCursorRow, lineCursorCol := cursorRowCol(runes, starts, cursor.Col, indent)
 		for k, s := range starts {
 			end := len(runes)
 			if k+1 < len(starts) {
@@ -227,12 +245,20 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 			if k > 0 {
 				rowIndent = indent
 			}
-			if i == e.cursor.Line {
-				if r, c := cursorRowCol(runes, starts, e.cursor.Col, indent); r == k {
-					cursorRow, cursorCol = len(rows), c+rowIndent
-				}
+			row := vrow{line: i, start: s, end: end, indent: rowIndent}
+			rows = append(rows, row)
+			if i != cursor.Line || lineCursorRow != k {
+				continue
 			}
-			rows = append(rows, vrow{line: i, start: s, end: end, indent: rowIndent})
+
+			cursorRow, cursorCol = len(rows)-1, lineCursorCol+rowIndent
+			if e.mode == ModeInsert && cursorCol >= width &&
+				renderedRowWidth(runes, row.start, row.end, row.indent, width) == width {
+				cursorRow, cursorCol = len(rows), indent
+				rows = append(rows, vrow{
+					line: i, start: cursor.Col, end: cursor.Col, indent: indent, synthetic: true,
+				})
+			}
 		}
 	}
 	return rows, cursorRow, cursorCol
@@ -276,15 +302,8 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 		sb.WriteString(style.Render(strings.Repeat(" ", row.indent)))
 	}
 	for i := row.start; i < row.end && i < len(runes); i++ {
-		w := runeWidthAt(runes[i], col)
-		if col+w > width {
-			if runes[i] == '\t' {
-				w = width - col
-			} else {
-				break
-			}
-		}
-		if w <= 0 {
+		w := renderedRuneWidth(runes[i], col, width)
+		if w < 0 {
 			break
 		}
 		style := washed(classStyles[lineClasses[i]], bg)

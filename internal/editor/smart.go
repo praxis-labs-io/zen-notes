@@ -13,8 +13,12 @@ type insertEdit struct {
 
 type listLine struct {
 	indent       int
+	markerEnd    int
 	contentStart int
 	nextPrefix   string
+	taskAt       int
+	task         bool
+	bareTask     bool
 }
 
 // enterEdit describes the context-aware edit for Enter in insert mode.
@@ -76,6 +80,17 @@ func parseListLine(line []rune) (listLine, bool) {
 	}
 
 	indent := string(line[:indentEnd])
+	if hasTaskMarker(line, indentEnd) {
+		contentStart, ok := skipRequiredSpace(line, indentEnd+3)
+		if !ok {
+			return listLine{}, false
+		}
+		return listLine{
+			indent: indentEnd, contentStart: contentStart, nextPrefix: indent + "[ ] ",
+			taskAt: indentEnd, task: true, bareTask: true,
+		}, true
+	}
+
 	switch line[indentEnd] {
 	case '-', '*', '+':
 		return parseBulletList(line, indentEnd, indent)
@@ -91,15 +106,20 @@ func parseBulletList(line []rune, markerAt int, indent string) (listLine, bool) 
 	}
 
 	prefix := indent + string(line[markerAt]) + " "
+	item := listLine{indent: markerAt, markerEnd: contentStart, contentStart: contentStart, nextPrefix: prefix}
 	if !hasTaskMarker(line, contentStart) {
-		return listLine{indent: markerAt, contentStart: contentStart, nextPrefix: prefix}, true
+		return item, true
 	}
 
-	contentStart, ok = skipRequiredSpace(line, contentStart+3)
+	taskAt := contentStart
+	contentStart, ok = skipRequiredSpace(line, taskAt+3)
 	if !ok {
-		return listLine{}, false
+		return item, true
 	}
-	return listLine{indent: markerAt, contentStart: contentStart, nextPrefix: prefix + "[ ] "}, true
+	item.contentStart = contentStart
+	item.nextPrefix += "[ ] "
+	item.taskAt, item.task = taskAt, true
+	return item, true
 }
 
 func parseOrderedList(line []rune, numberAt int, indent string) (listLine, bool) {
@@ -121,7 +141,7 @@ func parseOrderedList(line []rune, numberAt int, indent string) (listLine, bool)
 	}
 
 	prefix := indent + strconv.Itoa(n+1) + string(line[delimiterAt]) + " "
-	return listLine{indent: numberAt, contentStart: contentStart, nextPrefix: prefix}, true
+	return listLine{indent: numberAt, markerEnd: contentStart, contentStart: contentStart, nextPrefix: prefix}, true
 }
 
 func skipRequiredSpace(line []rune, at int) (int, bool) {

@@ -36,6 +36,7 @@ func (e *Editor) visualCommand(r rune) bool {
 		return false
 	}
 	e.pend = pending{}
+	e.screenColSet = false
 	return true
 }
 

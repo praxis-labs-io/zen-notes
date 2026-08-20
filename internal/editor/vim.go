@@ -149,25 +149,29 @@ type Editor struct {
 	undo []snapshot
 	redo []snapshot
 
-	desiredCol      int
-	top             int
-	rows            []vrow
-	cursorRow       int
-	lastVisual      [2]Pos
-	height          int
-	dirty           bool
-	darkBackground  bool
-	selection       lipgloss.Style
-	flashStyle      lipgloss.Style
-	matchStyle      lipgloss.Style
-	cursorLine      color.Color
-	flash           flashRange
-	quit            bool
-	saveWanted      bool
-	clipboard       string
-	clipboardWanted bool
-	openLink        string
-	openLinkWanted  bool
+	desiredCol            int
+	desiredScreenCol      int
+	screenColSet          bool
+	applyingDisplayMotion bool
+	layoutWidth           int
+	top                   int
+	rows                  []vrow
+	cursorRow             int
+	lastVisual            [2]Pos
+	height                int
+	dirty                 bool
+	darkBackground        bool
+	selection             lipgloss.Style
+	flashStyle            lipgloss.Style
+	matchStyle            lipgloss.Style
+	cursorLine            color.Color
+	flash                 flashRange
+	quit                  bool
+	saveWanted            bool
+	clipboard             string
+	clipboardWanted       bool
+	openLink              string
+	openLinkWanted        bool
 }
 
 const undoDepth = 200
@@ -201,6 +205,8 @@ func (e *Editor) Cursor() Pos { return e.cursor }
 func (e *Editor) SetCursor(p Pos) {
 	e.cursor = e.buf.Clamp(p)
 	e.clampCursor()
+	e.desiredCol = e.cursor.Col
+	e.screenColSet = false
 }
 
 // Mode is the current editing mode.
@@ -288,10 +294,13 @@ func (e *Editor) Selection() (Pos, Pos, bool) {
 func (e *Editor) Feed(k Key) {
 	switch e.mode {
 	case ModeInsert:
+		e.screenColSet = false
 		e.insertKey(k)
 	case ModeCommand:
+		e.screenColSet = false
 		e.commandKey(k)
 	case ModeSearch:
+		e.screenColSet = false
 		e.searchKey(k)
 	default:
 		e.normalKey(k)
@@ -304,6 +313,7 @@ func (e *Editor) Paste(text string) {
 		return
 	}
 
+	e.screenColSet = false
 	reg := clipboardRegister(text)
 	switch {
 	case e.mode == ModeInsert:
@@ -596,6 +606,9 @@ func (e *Editor) normalKey(k Key) {
 }
 
 func (e *Editor) namedNormalKey(name string) {
+	if name != "c-v" {
+		e.screenColSet = false
+	}
 	switch name {
 	case "esc":
 		e.pend = pending{}
@@ -673,6 +686,7 @@ func (e *Editor) operator(r rune) bool {
 	if op, ok := caseOp(r); ok && e.pend.op == op {
 		last := min(e.cursor.Line+e.pend.count()-1, e.buf.LineCount()-1)
 		e.applyOperator(op, motion{target: Pos{last, 0}, kind: linewise})
+		e.screenColSet = false
 		e.pend = pending{}
 		return true
 	}
@@ -687,16 +701,19 @@ func (e *Editor) operator(r rune) bool {
 	}
 	if e.mode.Visual() {
 		e.applyVisual(r)
+		e.screenColSet = false
 		return true
 	}
 	if e.pend.op == r {
 		line := e.cursor.Line
 		last := min(line+e.pend.count()-1, e.buf.LineCount()-1)
 		e.applyOperator(r, motion{target: Pos{last, 0}, kind: linewise})
+		e.screenColSet = false
 		e.pend = pending{}
 		return true
 	}
 	if e.pend.op != 0 {
+		e.screenColSet = false
 		e.pend = pending{}
 		return true
 	}
@@ -829,16 +846,23 @@ func (e *Editor) resolveAwait(r rune) {
 				line = min(e.pend.count1-1, e.buf.LineCount()-1)
 			}
 			e.applyMotion(motion{Pos{line, 0}, linewise})
+		case 'j':
+			e.applyDisplayMotion(1, e.pend.count())
+		case 'k':
+			e.applyDisplayMotion(-1, e.pend.count())
 		case 'x':
+			e.screenColSet = false
 			e.requestLinkUnderCursor()
 			e.pend = pending{}
 		case 'U', 'u', '~':
 			// gU, gu and g~ are operators, so they wait for a motion next.
 			e.pend.op, _ = caseOp(r)
 		case 'v':
+			e.screenColSet = false
 			e.reselect()
 			e.pend = pending{}
 		default:
+			e.screenColSet = false
 			e.pend = pending{}
 		}
 		return
@@ -951,10 +975,15 @@ func (e *Editor) applyMotion(m motion) {
 
 	if op != 0 {
 		e.applyOperator(op, m)
+		e.screenColSet = false
 		return
 	}
 	e.cursor = e.buf.Clamp(m.target)
 	e.clampCursor()
+	if e.applyingDisplayMotion {
+		return
+	}
+	e.screenColSet = false
 	if m.kind != linewise {
 		e.desiredCol = e.cursor.Col
 	}
@@ -1121,6 +1150,9 @@ func (e *Editor) applyVisual(op rune) {
 
 // command runs the standalone normal-mode keys that take no motion.
 func (e *Editor) command(r rune) {
+	if r != 'v' && r != 'V' {
+		e.screenColSet = false
+	}
 	n := e.pend.count()
 
 	switch r {

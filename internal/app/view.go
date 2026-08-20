@@ -116,8 +116,8 @@ var helpColumns = [2][]helpGroup{
 			{"esc", "normal mode"},
 		}},
 		{"Move", [][2]string{
-			{"h j k l", "left down up right"},
-			{"arrows", "same as h j k l"},
+			{"h j k l / arrows", "logical row"},
+			{"gj gk", "display row"},
 			{"w b e", "by word"},
 			{"0 ^ $", "line ends"},
 			{"gg G", "buffer ends"},

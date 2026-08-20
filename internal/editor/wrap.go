@@ -91,6 +91,30 @@ func runeWidthAt(r rune, col int) int {
 	return runewidth.RuneWidth(r)
 }
 
+// renderedRowWidth measures the cells renderRow can draw from one visual row.
+func renderedRowWidth(runes []rune, start, end, indent, width int) int {
+	col := indent
+	for i := start; i < end && i < len(runes); i++ {
+		w := renderedRuneWidth(runes[i], col, width)
+		if w < 0 {
+			break
+		}
+		col += w
+	}
+	return col
+}
+
+func renderedRuneWidth(r rune, col, width int) int {
+	w := runeWidthAt(r, col)
+	if col+w <= width {
+		return w
+	}
+	if r == '\t' && col < width {
+		return width - col
+	}
+	return -1
+}
+
 func leadingSpaceEnd(runes []rune) int {
 	end := 0
 	for end < len(runes) && (runes[end] == ' ' || runes[end] == '\t') {
@@ -130,6 +154,36 @@ func cursorRowCol(runes []rune, starts []int, col, indent int) (int, int) {
 		width += runeWidthAt(runes[i], width)
 	}
 	return row, width - base
+}
+
+// screenColumnToRune maps a display column on a visual row to a real rune.
+func screenColumnToRune(runes []rune, row vrow, desired, width int) int {
+	if len(runes) == 0 {
+		return 0
+	}
+	if desired < row.indent {
+		return min(row.start, len(runes)-1)
+	}
+
+	col, last := row.indent, -1
+	for i := row.start; i < row.end && i < len(runes); i++ {
+		w := renderedRuneWidth(runes[i], col, width)
+		if w < 0 {
+			break
+		}
+		if w == 0 {
+			continue
+		}
+		last = i
+		if desired < col+w {
+			return i
+		}
+		col += w
+	}
+	if last >= 0 {
+		return last
+	}
+	return min(row.start, len(runes)-1)
 }
 
 // scrollTo returns the top row that keeps the cursor row inside a window of
