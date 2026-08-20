@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -159,7 +160,7 @@ var helpColumns = [2][]helpGroup{
 // the window is too narrow to split.
 func helpLines(width, height int) []string {
 	if width < 60 {
-		return fit(renderHelpColumn(append(helpColumns[0], helpColumns[1]...), width-2), height)
+		return fit(renderHelpColumn(slices.Concat(helpColumns[0], helpColumns[1]), width-2), height)
 	}
 
 	colWidth := width / 2
