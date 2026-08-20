@@ -1,6 +1,9 @@
 package editor
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // search is the live pattern. Matches are plain substrings rather than regular
 // expressions, which is what reads naturally when searching prose.
@@ -118,7 +121,7 @@ func (e *Editor) findMatches(pattern string) []Pos {
 			if i < 0 {
 				break
 			}
-			out = append(out, Pos{line, runeLen(hay[:at+i])})
+			out = append(out, Pos{line, utf8.RuneCountInString(hay[:at+i])})
 			at += i + len(needle)
 		}
 	}
@@ -177,7 +180,7 @@ func (e *Editor) refreshMatches() {
 
 // matchCovers reports whether p sits inside a highlighted match.
 func (e *Editor) matchCovers(p Pos) bool {
-	n := runeLen(e.search.pattern)
+	n := utf8.RuneCountInString(e.search.pattern)
 	if n == 0 {
 		return false
 	}

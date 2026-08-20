@@ -160,7 +160,6 @@ type Editor struct {
 	lastVisual            [2]Pos
 	height                int
 	dirty                 bool
-	darkBackground        bool
 	selection             lipgloss.Style
 	flashStyle            lipgloss.Style
 	matchStyle            lipgloss.Style
@@ -181,22 +180,17 @@ func New(text string) *Editor {
 	return &Editor{
 		buf:  NewBuffer(text),
 		mode: ModeNormal,
-		// Assume dark until the terminal answers. A light selection on a dark
-		// background is the louder mistake of the two.
-		darkBackground: true,
-		selection:      darkSelection,
-		flashStyle:     darkFlash,
-		matchStyle:     darkMatch,
-		cursorLine:     darkCursorLine,
-		height:         20,
+		// Assume dark until the terminal answers.
+		selection:  darkSelection,
+		flashStyle: darkFlash,
+		matchStyle: darkMatch,
+		cursorLine: darkCursorLine,
+		height:     20,
 	}
 }
 
 // Text is the current buffer contents.
 func (e *Editor) Text() string { return e.buf.Text() }
-
-// Buffer exposes the lines for rendering.
-func (e *Editor) Buffer() *Buffer { return e.buf }
 
 // Cursor is where the caret sits.
 func (e *Editor) Cursor() Pos { return e.cursor }

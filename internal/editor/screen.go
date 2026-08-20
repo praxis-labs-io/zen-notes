@@ -14,11 +14,10 @@ func (e *Editor) displayMotion(delta, count int) motion {
 		return motion{target: Pos{line, col}, kind: charExclusive}
 	}
 
-	rows, targetRow, cursorCol := e.layoutAt(e.layoutWidth, e.cursor)
-	goal, hasGoal := e.desiredScreenCol, e.screenColSet
-	if !hasGoal {
+	rows, targetRow, cursorCol := e.layout(e.layoutWidth)
+	goal := e.desiredScreenCol
+	if !e.screenColSet {
 		goal = min(cursorCol, e.layoutWidth-1)
-		hasGoal = true
 	}
 
 	moved := false
@@ -39,7 +38,7 @@ func (e *Editor) displayMotion(delta, count int) motion {
 		row := rows[targetRow]
 		pos = Pos{row.line, screenColumnToRune(e.buf.runes(row.line), row, goal, e.layoutWidth)}
 	}
-	e.desiredScreenCol, e.screenColSet = goal, hasGoal
+	e.desiredScreenCol, e.screenColSet = goal, true
 	return motion{target: pos, kind: charExclusive}
 }
 
@@ -84,7 +83,7 @@ func (e *Editor) screenMotion(r rune, count int) (motion, bool) {
 // leaving the cursor on its line.
 func (e *Editor) scrollTop(where rune) {
 	if e.layoutWidth > 0 {
-		_, e.cursorRow, _ = e.layoutAt(e.layoutWidth, e.cursor)
+		_, e.cursorRow, _ = e.layout(e.layoutWidth)
 	}
 	switch where {
 	case 't':
