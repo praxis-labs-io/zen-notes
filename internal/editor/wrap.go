@@ -5,13 +5,9 @@ import "github.com/mattn/go-runewidth"
 const tabWidth = 8
 
 // rowStarts gives the rune index each wrapped row of a line begins at, always
-// starting with 0. It breaks after a space where it can, mid-word where it must.
-func rowStarts(runes []rune, width int) []int {
-	return indentedRowStarts(runes, width, 0)
-}
-
-// indentedRowStarts reserves indent cells on continuation rows.
-func indentedRowStarts(runes []rune, width, indent int) []int {
+// starting with 0. It breaks after a space where it can, mid-word where it
+// must, and reserves indent cells on continuation rows.
+func rowStarts(runes []rune, width, indent int) []int {
 	starts := []int{0}
 	if width <= 0 || len(runes) == 0 {
 		return starts

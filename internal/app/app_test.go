@@ -894,6 +894,21 @@ func TestHelpFitsWithoutClipping(t *testing.T) {
 	}
 }
 
+// Under 60 columns the help drops to one column, joining both lists. Every
+// group has to survive the join.
+func TestNarrowHelpKeepsEveryGroup(t *testing.T) {
+	m := newTestModel(t, "")
+	m.Update(tea.WindowSizeMsg{Width: 50, Height: 40})
+	press(m, "?")
+	out := ansi.Strip(m.View().Content)
+
+	for _, group := range []string{"Modes", "Move", "Edit", "Notes"} {
+		if !strings.Contains(out, group) {
+			t.Errorf("narrow help is missing the %s group", group)
+		}
+	}
+}
+
 func TestHelpStaysInsideTheFrame(t *testing.T) {
 	m := newTestModel(t, "")
 	m.Update(tea.WindowSizeMsg{Width: 72, Height: 20})

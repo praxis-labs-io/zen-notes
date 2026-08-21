@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
@@ -129,7 +128,8 @@ func (s *Store) Save(d Day, content string) error {
 	return nil
 }
 
-// Days lists the dates that have a saved note, oldest first.
+// Days lists the dates that have a saved note, oldest first. os.ReadDir
+// sorts by filename, and YYYY-MM-DD sorts chronologically.
 func (s *Store) Days() ([]Day, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
@@ -148,7 +148,6 @@ func (s *Store) Days() ([]Day, error) {
 			days = append(days, d)
 		}
 	}
-	sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
 	return days, nil
 }
 

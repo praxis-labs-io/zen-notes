@@ -2,6 +2,7 @@ package note
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -60,7 +61,7 @@ func (w *Watcher) loop() {
 			if !isNoteWrite(event) {
 				continue
 			}
-			w.send(baseName(event.Name))
+			w.send(filepath.Base(event.Name))
 		case _, ok := <-w.fs.Errors:
 			if !ok {
 				return
@@ -84,17 +85,10 @@ func isNoteWrite(e fsnotify.Event) bool {
 	if !e.Has(fsnotify.Write) && !e.Has(fsnotify.Create) && !e.Has(fsnotify.Rename) {
 		return false
 	}
-	name := baseName(e.Name)
+	name := filepath.Base(e.Name)
 	if !strings.HasSuffix(name, ".md") {
 		return false
 	}
 	_, ok := ParseDay(strings.TrimSuffix(name, ".md"))
 	return ok
-}
-
-func baseName(path string) string {
-	if i := strings.LastIndexByte(path, '/'); i >= 0 {
-		return path[i+1:]
-	}
-	return path
 }

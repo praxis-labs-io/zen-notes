@@ -2,7 +2,10 @@
 // vim motions and operators, markdown highlighting, and the view.
 package editor
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Pos addresses a rune in the buffer. Col counts runes, never bytes.
 type Pos struct {
@@ -125,7 +128,7 @@ func (b *Buffer) Insert(p Pos, text string) Pos {
 
 	parts := strings.Split(text, "\n")
 	if len(parts) == 1 {
-		b.lines[p.Line] = concat(head, []rune(parts[0]), tail)
+		b.lines[p.Line] = slices.Concat(head, []rune(parts[0]), tail)
 		return Pos{p.Line, p.Col + len([]rune(parts[0]))}
 	}
 
@@ -156,7 +159,7 @@ func (b *Buffer) Delete(from, to Pos) string {
 	if from.Line == to.Line {
 		line := b.lines[from.Line]
 		removed := string(line[from.Col:to.Col])
-		b.lines[from.Line] = concat(line[:from.Col], nil, line[to.Col:])
+		b.lines[from.Line] = slices.Concat(line[:from.Col], line[to.Col:])
 		return removed
 	}
 
@@ -169,7 +172,7 @@ func (b *Buffer) Delete(from, to Pos) string {
 	sb.WriteByte('\n')
 	sb.WriteString(string(b.lines[to.Line][:to.Col]))
 
-	joined := concat(b.lines[from.Line][:from.Col], nil, b.lines[to.Line][to.Col:])
+	joined := slices.Concat(b.lines[from.Line][:from.Col], b.lines[to.Line][to.Col:])
 	b.splice(from.Line, to.Line+1, [][]rune{joined})
 	return sb.String()
 }
@@ -202,11 +205,4 @@ func (b *Buffer) splice(from, to int, with [][]rune) {
 		next = [][]rune{{}}
 	}
 	b.lines = next
-}
-
-func concat(a, b, c []rune) []rune {
-	out := make([]rune, 0, len(a)+len(b)+len(c))
-	out = append(out, a...)
-	out = append(out, b...)
-	return append(out, c...)
 }

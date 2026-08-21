@@ -153,7 +153,7 @@ func TestRowStarts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := rowStarts([]rune(tt.line), tt.width)
+			got := rowStarts([]rune(tt.line), tt.width, 0)
 			if len(got) != len(tt.want) {
 				t.Fatalf("rowStarts = %v, want %v", got, tt.want)
 			}
@@ -167,14 +167,14 @@ func TestRowStarts(t *testing.T) {
 }
 
 func TestRowStartsAlwaysAdvances(t *testing.T) {
-	got := rowStarts([]rune("日本語"), 1)
+	got := rowStarts([]rune("日本語"), 1, 0)
 	if len(got) != 3 {
 		t.Fatalf("rowStarts = %v, want one row per wide rune", got)
 	}
 }
 
 func TestCursorRowAndColumn(t *testing.T) {
-	starts := rowStarts([]rune("hello world"), 5)
+	starts := rowStarts([]rune("hello world"), 5, 0)
 	tests := []struct {
 		col     int
 		wantRow int
@@ -710,7 +710,7 @@ func TestSelectionAssumesDarkUntilToldOtherwise(t *testing.T) {
 	feed(t, e, "vl")
 
 	dark := e.Render(20, 3).Content
-	e.SetDarkBackground(false)
+	e.SetBackground(colorful.Color{R: 0.97, G: 0.96, B: 0.94})
 	light := e.Render(20, 3).Content
 
 	if dark == light {

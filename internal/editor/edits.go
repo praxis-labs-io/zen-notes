@@ -1,5 +1,10 @@
 package editor
 
+import (
+	"strings"
+	"unicode"
+)
+
 // caseOp maps the key after g onto the operator that runs it, reporting
 // false for keys that are not one of gU, gu or g~.
 func caseOp(r rune) (rune, bool) {
@@ -32,9 +37,9 @@ func isCaseOp(op rune) bool {
 func caseFunc(op rune) func(rune) rune {
 	switch op {
 	case opUpper:
-		return toUpper
+		return unicode.ToUpper
 	case opLower:
-		return toLower
+		return unicode.ToLower
 	default:
 		return toggleCase
 	}
@@ -115,21 +120,18 @@ func matchBracket(b *Buffer, cur Pos) (Pos, bool) {
 	return Pos{}, false
 }
 
+const (
+	openBrackets  = "([{"
+	closeBrackets = ")]}"
+)
+
 // bracketPair reports the delimiters r belongs to and which way to scan.
 func bracketPair(r rune) (open, close rune, forward, ok bool) {
-	switch r {
-	case '(':
-		return '(', ')', true, true
-	case ')':
-		return '(', ')', false, true
-	case '[':
-		return '[', ']', true, true
-	case ']':
-		return '[', ']', false, true
-	case '{':
-		return '{', '}', true, true
-	case '}':
-		return '{', '}', false, true
+	if i := strings.IndexRune(openBrackets, r); i >= 0 {
+		return r, rune(closeBrackets[i]), true, true
+	}
+	if i := strings.IndexRune(closeBrackets, r); i >= 0 {
+		return rune(openBrackets[i]), r, false, true
 	}
 	return 0, 0, false, false
 }

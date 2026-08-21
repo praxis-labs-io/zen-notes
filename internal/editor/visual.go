@@ -1,6 +1,9 @@
 package editor
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 const indentUnit = "  "
 
@@ -21,9 +24,9 @@ func (e *Editor) visualCommand(r rune) bool {
 	case '~':
 		e.mapSelection(toggleCase)
 	case 'u':
-		e.mapSelection(toLower)
+		e.mapSelection(unicode.ToLower)
 	case 'U':
-		e.mapSelection(toUpper)
+		e.mapSelection(unicode.ToUpper)
 	case 'J':
 		e.joinLines(from.Line, max(to.Line, from.Line+1))
 		e.mode = ModeNormal
@@ -163,24 +166,10 @@ func (e *Editor) pasteVisualBlock(from, to Pos, reg register) {
 }
 
 func toggleCase(r rune) rune {
-	if lower := toLower(r); lower != r {
+	if lower := unicode.ToLower(r); lower != r {
 		return lower
 	}
-	return toUpper(r)
-}
-
-func toUpper(r rune) rune {
-	if r >= 'a' && r <= 'z' {
-		return r - 32
-	}
-	return r
-}
-
-func toLower(r rune) rune {
-	if r >= 'A' && r <= 'Z' {
-		return r + 32
-	}
-	return r
+	return unicode.ToUpper(r)
 }
 
 // joinLines pulls the lines after from up onto it, separated by one space and

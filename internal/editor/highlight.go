@@ -1,6 +1,9 @@
 package editor
 
-import "regexp"
+import (
+	"regexp"
+	"unicode/utf8"
+)
 
 // tokenClass is what a rune means in markdown. Styling maps these to colors,
 // so the classifier stays testable without comparing escape sequences.
@@ -103,8 +106,8 @@ func markLinePrefix(runes []rune, classes []tokenClass) int {
 	line := string(runes)
 	start := 0
 	if m := quoteRe.FindStringSubmatchIndex(line); m != nil {
-		start = runeLen(line[:m[1]])
-		fill(classes, runeLen(line[:m[4]]), start, tokMarker)
+		start = utf8.RuneCountInString(line[:m[1]])
+		fill(classes, utf8.RuneCountInString(line[:m[4]]), start, tokMarker)
 	}
 	if hasTaskMarker(runes, start) {
 		if contentStart, ok := skipRequiredSpace(runes, start+3); ok {
@@ -135,8 +138,8 @@ func markInline(runes []rune, classes []tokenClass, from int) {
 		for _, seg := range plainRuns(classes, from) {
 			text := string(runes[seg[0]:seg[1]])
 			for _, m := range p.re.FindAllStringIndex(text, -1) {
-				lo := seg[0] + runeLen(text[:m[0]])
-				fill(classes, lo, seg[0]+runeLen(text[:m[1]]), p.class)
+				lo := seg[0] + utf8.RuneCountInString(text[:m[0]])
+				fill(classes, lo, seg[0]+utf8.RuneCountInString(text[:m[1]]), p.class)
 			}
 		}
 	}
@@ -169,5 +172,3 @@ func fill(classes []tokenClass, from, to int, c tokenClass) {
 		classes[i] = c
 	}
 }
-
-func runeLen(s string) int { return len([]rune(s)) }

@@ -1,12 +1,12 @@
 package app
 
 import (
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mattn/go-runewidth"
 	"github.com/praxis-labs-io/zen-notes/internal/editor"
 )
 
@@ -85,7 +85,7 @@ func (m *Model) statusBar(width int) string {
 // own applies, and mode picks the pair: blinking bar to type in, steady block.
 func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
 	if cmd := m.ed.CommandLine(); cmd != "" {
-		c := tea.NewCursor(runewidth.StringWidth(cmd), m.textHeight())
+		c := tea.NewCursor(ansi.StringWidth(cmd), m.textHeight())
 		c.Shape = tea.CursorBar
 		return c
 	}
@@ -160,7 +160,7 @@ var helpColumns = [2][]helpGroup{
 // the window is too narrow to split.
 func helpLines(width, height int) []string {
 	if width < 60 {
-		return fit(renderHelpColumn(append(helpColumns[0], helpColumns[1]...), width-2), height)
+		return fit(renderHelpColumn(slices.Concat(helpColumns[0], helpColumns[1]), width-2), height)
 	}
 
 	colWidth := width / 2
@@ -185,7 +185,7 @@ func renderHelpColumn(groups []helpGroup, width int) []string {
 	keyWidth := 0
 	for _, g := range groups {
 		for _, k := range g.keys {
-			keyWidth = max(keyWidth, runewidth.StringWidth(k[0])+2)
+			keyWidth = max(keyWidth, ansi.StringWidth(k[0])+2)
 		}
 	}
 	keyWidth = min(keyWidth, max(width/2, 8))
@@ -218,7 +218,7 @@ func fit(rows []string, height int) []string {
 }
 
 func pad(s string, width int) string {
-	if gap := width - runewidth.StringWidth(s); gap > 0 {
+	if gap := width - ansi.StringWidth(s); gap > 0 {
 		return s + strings.Repeat(" ", gap)
 	}
 	return s + " "

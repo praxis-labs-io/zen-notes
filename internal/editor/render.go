@@ -23,17 +23,13 @@ var classStyles = map[tokenClass]lipgloss.Style{
 	tokLink:      lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("4")),
 }
 
-// Fallbacks for when the terminal will not say what its background is,
-// which happens under some multiplexers.
+// Fallbacks for when the terminal never says what its background is, which
+// happens under some multiplexers. Dark only: it is the safer guess.
 var (
-	darkSelection   = lipgloss.NewStyle().Background(lipgloss.Color("237"))
-	lightSelection  = lipgloss.NewStyle().Background(lipgloss.Color("253"))
-	darkFlash       = lipgloss.NewStyle().Background(lipgloss.Color("242"))
-	lightFlash      = lipgloss.NewStyle().Background(lipgloss.Color("248"))
-	darkMatch       = lipgloss.NewStyle().Background(lipgloss.Color("240"))
-	lightMatch      = lipgloss.NewStyle().Background(lipgloss.Color("250"))
-	darkCursorLine  = lipgloss.Color("236")
-	lightCursorLine = lipgloss.Color("254")
+	darkSelection  = lipgloss.NewStyle().Background(lipgloss.Color("237"))
+	darkFlash      = lipgloss.NewStyle().Background(lipgloss.Color("242"))
+	darkMatch      = lipgloss.NewStyle().Background(lipgloss.Color("240"))
+	darkCursorLine = lipgloss.Color("236")
 )
 
 // How far each shade sits off the background. A step near white reads
@@ -54,18 +50,6 @@ var (
 	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 )
 
-// SetDarkBackground picks fallbacks when only the light or dark bias is
-// known, not the colour itself.
-func (e *Editor) SetDarkBackground(dark bool) {
-	e.darkBackground = dark
-	e.selection, e.flashStyle, e.matchStyle = darkSelection, darkFlash, darkMatch
-	e.cursorLine = darkCursorLine
-	if !dark {
-		e.selection, e.flashStyle, e.matchStyle = lightSelection, lightFlash, lightMatch
-		e.cursorLine = lightCursorLine
-	}
-}
-
 // SetBackground tunes the selection and the yank flash to the terminal's own
 // background, keeping its hue so both belong to the theme rather than greying
 // it out. Call it again whenever the terminal may have changed theme.
@@ -75,11 +59,10 @@ func (e *Editor) SetBackground(c color.Color) {
 		return
 	}
 	h, s, l := col.Hsl()
-	e.darkBackground = l < 0.5
 
 	selStep, flashStep := darkSelectionStep, darkFlashStep
 	matchStep, lineStep := darkMatchStep, darkCursorLineStep
-	if !e.darkBackground {
+	if l >= 0.5 {
 		selStep, flashStep = -lightSelectionStep, -lightFlashStep
 		matchStep, lineStep = -lightMatchStep, -lightCursorLineStep
 	}
@@ -98,8 +81,6 @@ func shade(h, s, l, step float64) color.Color {
 func shifted(h, s, l, step float64) lipgloss.Style {
 	return lipgloss.NewStyle().Background(shade(h, s, l, step))
 }
-
-func (e *Editor) selectionStyle() lipgloss.Style { return e.selection }
 
 // YankFlash reports whether a yank is still lit up.
 func (e *Editor) YankFlash() bool { return e.flash.active }
@@ -217,10 +198,6 @@ func (e *Editor) Render(width, height int) Rendered {
 // layout wraps every line and reports where the cursor lands, as a row index
 // into the returned rows and a display column within that row.
 func (e *Editor) layout(width int) ([]vrow, int, int) {
-	return e.layoutAt(width, e.cursor)
-}
-
-func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 	var rows []vrow
 	cursorRow, cursorCol := 0, 0
 
@@ -230,12 +207,12 @@ func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 		visible := runes
 		if leadingSpaceEnd(runes) == len(runes) {
 			visible = nil
-			if i == cursor.Line {
-				visible = runes[:min(cursor.Col+1, len(runes))]
+			if i == e.cursor.Line {
+				visible = runes[:min(e.cursor.Col+1, len(runes))]
 			}
 		}
-		starts := indentedRowStarts(visible, width, indent)
-		lineCursorRow, lineCursorCol := cursorRowCol(runes, starts, cursor.Col, indent)
+		starts := rowStarts(visible, width, indent)
+		lineCursorRow, lineCursorCol := cursorRowCol(runes, starts, e.cursor.Col, indent)
 		for k, s := range starts {
 			end := len(runes)
 			if k+1 < len(starts) {
@@ -247,7 +224,7 @@ func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 			}
 			row := vrow{line: i, start: s, end: end, indent: rowIndent}
 			rows = append(rows, row)
-			if i != cursor.Line || lineCursorRow != k {
+			if i != e.cursor.Line || lineCursorRow != k {
 				continue
 			}
 
@@ -256,7 +233,7 @@ func (e *Editor) layoutAt(width int, cursor Pos) ([]vrow, int, int) {
 				renderedRowWidth(runes, row.start, row.end, row.indent, width) == width {
 				cursorRow, cursorCol = len(rows), indent
 				rows = append(rows, vrow{
-					line: i, start: cursor.Col, end: cursor.Col, indent: indent, synthetic: true,
+					line: i, start: e.cursor.Col, end: e.cursor.Col, indent: indent, synthetic: true,
 				})
 			}
 		}
@@ -297,7 +274,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 		case e.flash.linewise && e.flashCovers(at):
 			style = e.flashStyle
 		case selLines && e.selected(at, selFrom, selTo, selLines):
-			style = e.selectionStyle()
+			style = e.selection
 		}
 		sb.WriteString(style.Render(strings.Repeat(" ", row.indent)))
 	}
@@ -311,7 +288,7 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 		case e.flashCovers(Pos{row.line, i}):
 			style = e.flashStyle
 		case e.selected(Pos{row.line, i}, selFrom, selTo, selLines):
-			style = e.selectionStyle()
+			style = e.selection
 		case e.matchCovers(Pos{row.line, i}):
 			style = e.matchStyle
 		}
