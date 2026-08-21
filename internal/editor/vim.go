@@ -172,6 +172,7 @@ type Editor struct {
 	clipboardWanted       bool
 	openLink              string
 	openLinkWanted        bool
+	images                map[string]ImagePlacement
 }
 
 const undoDepth = 200

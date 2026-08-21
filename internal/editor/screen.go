@@ -24,7 +24,7 @@ func (e *Editor) displayMotion(delta, count int) motion {
 	moved := false
 	for range count {
 		nextRow := targetRow + delta
-		for nextRow >= 0 && nextRow < len(rows) && rows[nextRow].synthetic {
+		for nextRow >= 0 && nextRow < len(rows) && (rows[nextRow].synthetic || rows[nextRow].image.ok()) {
 			nextRow += delta
 		}
 		if nextRow < 0 || nextRow >= len(rows) {
