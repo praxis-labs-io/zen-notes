@@ -166,8 +166,8 @@ func (e *Editor) pasteVisualBlock(from, to Pos, reg register) {
 }
 
 func toggleCase(r rune) rune {
-	if unicode.IsUpper(r) {
-		return unicode.ToLower(r)
+	if lower := unicode.ToLower(r); lower != r {
+		return lower
 	}
 	return unicode.ToUpper(r)
 }

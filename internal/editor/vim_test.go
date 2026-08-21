@@ -1602,6 +1602,7 @@ func TestCaseOperators(t *testing.T) {
 		{"gUU on the line", "foo bar", "gUU", "FOO BAR"},
 		{"gUiw beyond ASCII", "café niño", "gUiw", "CAFÉ niño"},
 		{"g~iw beyond ASCII", "Éclair", "g~iw", "éCLAIR"},
+		{"g~iw on titlecase", "ǅar", "g~iw", "ǆAR"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
