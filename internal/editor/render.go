@@ -149,12 +149,14 @@ type Rendered struct {
 	CursorCol int
 }
 
-// vrow is one wrapped screen row, including caret-only synthetic rows.
+// vrow is one wrapped screen row, including caret-only synthetic rows and the
+// placeholder rows an image is drawn on.
 type vrow struct {
 	line       int
 	start, end int
 	indent     int
 	synthetic  bool
+	image      imageRow
 }
 
 // Render draws height rows of the buffer, scrolling to keep the caret in
@@ -185,6 +187,9 @@ func (e *Editor) Render(width, height int) Rendered {
 		}
 		row := rows[i]
 		bg := e.cursorLineBG(row.line)
+		if row.image.ok() {
+			bg = nil
+		}
 		text, used := e.renderRow(row, classes, textWidth, bg)
 		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0 && !row.synthetic, bg)+text+trail(bg, textWidth-used))
 	}
@@ -237,8 +242,29 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 				})
 			}
 		}
+		rows = append(rows, e.imageRows(i)...)
 	}
 	return rows, cursorRow, cursorCol
+}
+
+// imageRows reserves the placeholder rows for a line's image, appended after
+// the line's text rows so the caret never lands in them.
+func (e *Editor) imageRows(line int) []vrow {
+	placement, ok := e.imagePlacement(line)
+	if !ok {
+		return nil
+	}
+	end := e.buf.LineLen(line)
+	rows := make([]vrow, min(placement.Rows, MaxImageCells))
+	for r := range rows {
+		rows[r] = vrow{
+			line:  line,
+			start: end,
+			end:   end,
+			image: imageRow{id: placement.ID, row: r, cols: placement.Cols},
+		}
+	}
+	return rows
 }
 
 // cursorLineBG is the wash to lay under line, nil for any other line and for
@@ -261,6 +287,9 @@ func trail(bg color.Color, width int) string {
 // renderRow styles one screen row and reports how wide it came out. It stops
 // at width, because the space a line wraps on stays on the row above.
 func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color.Color) (string, int) {
+	if row.image.ok() {
+		return row.image.render(width)
+	}
 	runes := e.buf.runes(row.line)
 	lineClasses := classes[row.line]
 	selFrom, selTo, selLines := e.Selection()

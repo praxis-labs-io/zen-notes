@@ -3,8 +3,8 @@
 One notepad per day. Run `zen-notes` from anywhere and you land in today's
 note, already open. Two terminals on the same day stay in sync.
 
-Markdown, syntax highlighted as you type, edited with vim motions. Nothing
-else.
+Markdown, syntax highlighted as you type, edited with vim motions. Images
+render inline where your terminal supports it. Nothing else.
 
 ## Install
 
@@ -43,6 +43,26 @@ Past midnight the app moves to the new day on its own, unless you have browsed
 away from today.
 
 There is one flag, `-dir`, which overrides `$ZEN_NOTES_DIR` for a single run.
+
+## Images
+
+A line holding nothing but an image reference draws the image under it:
+
+```
+![a sketch](sketch.png)
+```
+
+The line stays as you typed it, and the picture sits below. Paths are
+relative to your notes directory, or absolute, or start with `~`. Nothing
+is fetched over the network.
+
+This needs a terminal that speaks the kitty graphics protocol, which
+Ghostty and kitty do. zen-notes asks the terminal how big a cell is, and
+draws images only if it answers. Everywhere else the line stays text, and
+nothing else changes. tmux does not pass these images through.
+
+An image is scaled to fit the width of your note and half the window, so
+it never buries what you wrote around it.
 
 ## Keys
 
@@ -120,7 +140,8 @@ that is always reserved so text never shifts.
 
 The cursor's line carries a band across the full width, gutter included, in
 normal and insert mode. It goes out in visual mode, where the selection is
-the thing to look at. A wrapped line is banded on every row it takes.
+the thing to look at. A wrapped line is banded on every row it takes, and
+an image's rows take no band, so the picture is not framed by one.
 
 No color is hardcoded. Text, gutter, status bar and help all use ANSI slots
 0 to 15, so they come from your terminal theme. The caret is the real

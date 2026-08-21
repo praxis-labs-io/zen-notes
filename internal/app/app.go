@@ -8,6 +8,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/praxis-labs-io/zen-notes/internal/editor"
 	"github.com/praxis-labs-io/zen-notes/internal/note"
 )
@@ -77,6 +79,7 @@ type Model struct {
 	help        bool
 
 	width, height int
+	images        *images
 	now           func() note.Day
 	openLink      func(string) error
 	linkRequest   int
@@ -99,13 +102,17 @@ func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 		lastWritten: text,
 		width:       80,
 		height:      24,
+		images:      newImages(),
 		now:         note.Today,
 		openLink:    systemOpenLink,
 	}, nil
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(tick(), waitForChange(m.watch), tea.RequestBackgroundColor)
+	// WindowOp 16 asks for the cell size in pixels. A terminal that never
+	// answers gets no images, and the markdown stays text.
+	return tea.Batch(tick(), waitForChange(m.watch), tea.RequestBackgroundColor,
+		tea.Raw(ansi.WindowOp(16)))
 }
 
 func tick() tea.Cmd {
@@ -127,7 +134,16 @@ func waitForChange(w *note.Watcher) tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, cmd := m.update(msg)
+	return model, tea.Batch(cmd, m.syncImages())
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case uv.CellSizeEvent:
+		m.images.cellW, m.images.cellH = msg.Width, msg.Height
+		return m, nil
+
 	case tea.BackgroundColorMsg:
 		m.ed.SetBackground(msg.Color)
 		return m, nil
@@ -155,7 +171,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.ed.SetHeight(m.textHeight())
-		return m, nil
+		// A font size change moves the cell size and the window together.
+		return m, tea.Raw(ansi.WindowOp(16))
 
 	case tickMsg:
 		m.expireStatus()

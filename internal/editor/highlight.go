@@ -130,8 +130,12 @@ func markCheckbox(runes []rune, classes []tokenClass, at int) {
 // left over from a bold span cannot pair with a later one across it.
 func markInline(runes []rune, classes []tokenClass, from int) {
 	for _, link := range inlineLinks(runes) {
-		if link.from >= from {
-			fill(classes, link.from, link.to, tokLink)
+		start := link.from
+		if start > from && runes[start-1] == '!' && !isEscaped(runes, start-1) {
+			start--
+		}
+		if start >= from {
+			fill(classes, start, link.to, tokLink)
 		}
 	}
 	for _, p := range inlinePatterns {
