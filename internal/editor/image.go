@@ -8,6 +8,10 @@ import (
 	"github.com/charmbracelet/x/ansi/kitty"
 )
 
+// MaxImageCells is the largest placeholder grid the protocol can address: a
+// cell says where it sits with a diacritic, and there are only so many.
+const MaxImageCells = 297
+
 // ImagePlacement is where an image has been given room, in cells. The app
 // resolves and measures the file; the editor only reserves the rows.
 type ImagePlacement struct {
@@ -53,7 +57,7 @@ func imageLineTarget(runes []rune) (string, bool) {
 	for to > from && isLinkSpace(runes[to-1]) {
 		to--
 	}
-	if to-from < 2 || runes[from] != '!' {
+	if to-from < 2 || runes[from] != '!' || runes[from+1] != '[' {
 		return "", false
 	}
 	link, ok := parseInlineLink(runes[:to], from+1)
@@ -77,7 +81,7 @@ func (r imageRow) ok() bool { return r.id != 0 }
 // so a partial redraw stays correct.
 func (r imageRow) render(width int) (string, int) {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color(strconv.Itoa(r.id)))
-	cols := min(r.cols, width)
+	cols := min(r.cols, width, MaxImageCells)
 	var sb strings.Builder
 	for col := range cols {
 		sb.WriteString(style.Render(string([]rune{

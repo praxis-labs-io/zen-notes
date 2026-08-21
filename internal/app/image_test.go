@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -9,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi/kitty"
 )
 
 // writeImage puts a natW x natH image on disk and returns its path.
@@ -252,5 +256,119 @@ func TestDeleteImageTargetsOneID(t *testing.T) {
 	seq := deleteImage(9)
 	if !strings.Contains(seq, "a=d") || !strings.Contains(seq, "d=I") || !strings.Contains(seq, "i=9") {
 		t.Fatalf("deleteImage = %q, want a delete for id 9", seq)
+	}
+}
+
+// countingFS records how often the header of an image is read, which is the
+// expensive half of a resolve.
+func TestResolveReadsTheHeaderOnlyWhenSomethingMoved(t *testing.T) {
+	dir := t.TempDir()
+	path := writeImage(t, dir, "pic.png", 100, 200)
+	i := newImages()
+	i.cellW, i.cellH = 10, 20
+
+	if _, _, err := i.resolve("pic.png", dir, 40, 20); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	// Make the file unreadable as an image. A resolve that still re-reads the
+	// header would now fail; one that trusts the cache returns what it had.
+	if err := os.WriteFile(path, []byte("no longer a png"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Restore the recorded stat so the entry still looks unchanged.
+	entry := i.entries["pic.png"]
+	stat, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry.size, entry.mtime = stat.Size(), stat.ModTime()
+	i.entries["pic.png"] = entry
+
+	if _, _, err := i.resolve("pic.png", dir, 40, 20); err != nil {
+		t.Fatalf("resolve re-read the header of an unchanged image: %v", err)
+	}
+
+	// Different bounds mean a different fit, so the header has to be read,
+	// and now it cannot be.
+	if _, _, err := i.resolve("pic.png", dir, 4, 20); err == nil {
+		t.Fatal("resolve skipped the fit after the bounds changed")
+	}
+}
+
+func TestClaimIDNeverTakesAnIDInUse(t *testing.T) {
+	i := newImages()
+	for n := range maxImageID {
+		target := fmt.Sprintf("pic%d.png", n)
+		i.entries[target] = imageEntry{id: i.claimID(target)}
+	}
+
+	live := map[int]bool{}
+	for target, e := range i.entries {
+		if live[e.id] {
+			t.Fatalf("id %d handed out twice, latest to %s", e.id, target)
+		}
+		live[e.id] = true
+	}
+	if len(live) != maxImageID {
+		t.Fatalf("claimID produced %d distinct ids, want %d", len(live), maxImageID)
+	}
+
+	// Freeing one id makes exactly that id the one available again. A counter
+	// that only wraps would hand out whatever it landed on next.
+	freed := i.entries["pic7.png"].id
+	delete(i.entries, "pic7.png")
+	if got := i.claimID("fresh.png"); got != freed {
+		t.Fatalf("claimID = %d, want the freed id %d", got, freed)
+	}
+}
+
+func TestClaimIDReusesATargetsOwnID(t *testing.T) {
+	i := newImages()
+	first := i.claimID("pic.png")
+	i.entries["pic.png"] = imageEntry{id: first}
+	if again := i.claimID("pic.png"); again != first {
+		t.Fatalf("claimID = %d for a known target, want %d", again, first)
+	}
+}
+
+// A target that resolved once and then stops must be released, or its entry,
+// its terminal-side image and its id are held for the rest of the session.
+func TestSyncImagesReleasesATargetThatStopsResolving(t *testing.T) {
+	m := newTestModel(t, "![](pic.png)")
+	path := writeImage(t, m.store.Dir(), "pic.png", 100, 200)
+	m.images.cellW, m.images.cellH = 10, 20
+
+	m.syncImages()
+	if len(m.images.entries) != 1 {
+		t.Fatalf("entries = %d after a good resolve, want 1", len(m.images.entries))
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	m.syncImages()
+
+	if len(m.images.entries) != 0 {
+		t.Fatalf("entries = %d after the file went away, want 0", len(m.images.entries))
+	}
+	if got := m.ed.Render(80, 24); strings.Contains(got.Content, string(kitty.Placeholder)) {
+		t.Fatal("image rows survived the file going away")
+	}
+}
+
+func TestSyncImagesDropsPlacementsWhenThereIsNoRoom(t *testing.T) {
+	m := newTestModel(t, "![](pic.png)")
+	writeImage(t, m.store.Dir(), "pic.png", 100, 200)
+	m.images.cellW, m.images.cellH = 10, 20
+
+	m.syncImages()
+	if got := m.ed.Render(80, 24); !strings.Contains(got.Content, string(kitty.Placeholder)) {
+		t.Fatal("no image placed at a normal window size")
+	}
+
+	// textHeight floors at 1, so half of it is zero and nothing can be drawn.
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 2})
+	if got := m.ed.Render(80, 2); strings.Contains(got.Content, string(kitty.Placeholder)) {
+		t.Fatal("image rows survived a window with no room for them")
 	}
 }

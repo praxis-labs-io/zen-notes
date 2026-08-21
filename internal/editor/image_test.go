@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"image/color"
 	"strings"
 	"testing"
 
@@ -41,6 +42,56 @@ func TestImageLineTarget(t *testing.T) {
 				t.Fatalf("imageLineTarget(%q) = %q/%v, want %q", tt.line, got, ok, tt.want)
 			}
 		})
+	}
+}
+
+// parseInlineLink starts past the bracket, so a caller that skips the check
+// would take "!x](pic.png)" for an image.
+func TestImageLineTargetRequiresABracket(t *testing.T) {
+	for _, line := range []string{"!x](pic.png)", "!(pic.png)", "!!](pic.png)"} {
+		if got, ok := imageLineTarget([]rune(line)); ok {
+			t.Fatalf("imageLineTarget(%q) = %q, want no image", line, got)
+		}
+	}
+}
+
+func TestImageGridStopsAtTheAddressableLimit(t *testing.T) {
+	e := New("![](p.png)")
+	e.SetImages(map[string]ImagePlacement{"p.png": {ID: 7, Cols: 400, Rows: 400}})
+	rows := strings.Split(e.Render(GutterWidth(1)+500, 400).Content, "\n")
+
+	// A cell past the diacritic table would repeat the first column's mark,
+	// and kitty would draw that column again instead of the rest of the image.
+	if got := placeholderCount(rows[1]); got != MaxImageCells {
+		t.Fatalf("image row has %d placeholder cells, want %d", got, MaxImageCells)
+	}
+	imageRows := 0
+	for _, row := range rows[1:] {
+		if placeholderCount(row) > 0 {
+			imageRows++
+		}
+	}
+	if imageRows != MaxImageCells {
+		t.Fatalf("image reserved %d rows, want %d", imageRows, MaxImageCells)
+	}
+}
+
+func TestImageRowsTakeNoCursorLineWash(t *testing.T) {
+	e := New("![alt](pic.png)\nbelow")
+	e.SetBackground(color.Black)
+	e.SetImages(map[string]ImagePlacement{"pic.png": {ID: 7, Cols: 4, Rows: 2}})
+	rows := strings.Split(e.Render(GutterWidth(2)+20, 12).Content, "\n")
+
+	// The caret is on the image's line, so its own row is washed. The image
+	// rows must not be, or the wash frames the picture in the gutter and the
+	// trail while leaving the middle bare.
+	if !strings.Contains(rows[0], "\x1b[48") {
+		t.Fatalf("image line row = %q, want the cursor line wash", rows[0])
+	}
+	for i := 1; i < 3; i++ {
+		if strings.Contains(rows[i], "\x1b[48") {
+			t.Fatalf("image row %d = %q, want no cursor line wash", i, rows[i])
+		}
 	}
 }
 

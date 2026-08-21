@@ -23,11 +23,18 @@ const maxImageID = 255
 
 // imageEntry is a note reference we resolved, measured and transmitted.
 type imageEntry struct {
-	id    int
-	path  string
-	size  int64
-	mtime time.Time
+	id               int
+	path             string
+	size             int64
+	mtime            time.Time
+	maxCols, maxRows int
 	editor.ImagePlacement
+}
+
+// bound reports whether the entry was fitted to the same room it is being
+// asked about, so an unchanged file can skip re-reading its header.
+func (e imageEntry) bound(maxCols, maxRows int) bool {
+	return e.maxCols == maxCols && e.maxRows == maxRows
 }
 
 // images holds what the terminal is currently showing, keyed by the target as
@@ -58,18 +65,21 @@ func (m *Model) syncImages() tea.Cmd {
 
 	maxCols, maxRows := m.imageBounds()
 	if maxCols <= 0 || maxRows <= 0 {
+		// No room to draw in. Stale placements would reserve rows sized for
+		// a window that is gone.
+		m.ed.SetImages(nil)
 		return nil
 	}
 
 	var seqs []string
 	placements := map[string]editor.ImagePlacement{}
-	wanted := map[string]bool{}
+	tried := map[string]bool{}
 
 	for _, target := range m.ed.ImageTargets() {
-		if wanted[target] {
+		if tried[target] {
 			continue
 		}
-		wanted[target] = true
+		tried[target] = true
 
 		entry, seq, err := m.images.resolve(target, m.store.Dir(), maxCols, maxRows)
 		if err != nil {
@@ -82,7 +92,7 @@ func (m *Model) syncImages() tea.Cmd {
 	}
 
 	for target, entry := range m.images.entries {
-		if wanted[target] {
+		if _, ok := placements[target]; ok {
 			continue
 		}
 		delete(m.images.entries, target)
@@ -100,7 +110,7 @@ func (m *Model) syncImages() tea.Cmd {
 // the window, so an image never buries the note it belongs to.
 func (m *Model) imageBounds() (cols, rows int) {
 	gutter := editor.GutterWidth(m.ed.Buffer().LineCount())
-	return m.width - gutter, m.textHeight() / 2
+	return min(m.width-gutter, editor.MaxImageCells), min(m.textHeight()/2, editor.MaxImageCells)
 }
 
 // resolve returns the placement for a target, transmitting the image when it
@@ -115,22 +125,31 @@ func (i *images) resolve(target, dir string, maxCols, maxRows int) (imageEntry, 
 		return imageEntry{}, "", fmt.Errorf("stat image: %w", err)
 	}
 
+	was, known := i.entries[target]
+	unchanged := known && was.path == path &&
+		was.size == stat.Size() && was.mtime.Equal(stat.ModTime()) &&
+		was.bound(maxCols, maxRows)
+	if unchanged {
+		return was, "", nil
+	}
+
 	cols, rows, err := fitImage(path, i.cellW, i.cellH, maxCols, maxRows)
 	if err != nil {
 		return imageEntry{}, "", err
 	}
-
-	if was, ok := i.entries[target]; ok &&
-		was.path == path && was.size == stat.Size() && was.mtime.Equal(stat.ModTime()) &&
-		was.Cols == cols && was.Rows == rows {
+	if known && was.Cols == cols && was.Rows == rows {
+		was.maxCols, was.maxRows = maxCols, maxRows
+		i.entries[target] = was
 		return was, "", nil
 	}
 
 	entry := imageEntry{
-		id:    i.claimID(target),
-		path:  path,
-		size:  stat.Size(),
-		mtime: stat.ModTime(),
+		id:      i.claimID(target),
+		path:    path,
+		size:    stat.Size(),
+		mtime:   stat.ModTime(),
+		maxCols: maxCols,
+		maxRows: maxRows,
 		ImagePlacement: editor.ImagePlacement{
 			Cols: cols,
 			Rows: rows,
@@ -147,17 +166,25 @@ func (i *images) resolve(target, dir string, maxCols, maxRows int) (imageEntry, 
 }
 
 // claimID reuses a target's id so a resize replaces the image in place rather
-// than filling the terminal's store with copies.
+// than filling the terminal's store with copies. A wrapped counter would hand
+// out an id another entry still holds, and transmitting over it would show
+// that entry the wrong picture.
 func (i *images) claimID(target string) int {
 	if was, ok := i.entries[target]; ok {
 		return was.id
 	}
-	id := i.nextID
-	i.nextID++
-	if i.nextID > maxImageID {
-		i.nextID = 1
+	live := make(map[int]bool, len(i.entries))
+	for _, e := range i.entries {
+		live[e.id] = true
 	}
-	return id
+	for range maxImageID {
+		id := i.nextID
+		i.nextID = id%maxImageID + 1
+		if !live[id] {
+			return id
+		}
+	}
+	return i.nextID
 }
 
 // resolveImagePath turns a note's target into a local file. Nothing that

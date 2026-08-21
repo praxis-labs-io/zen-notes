@@ -206,6 +206,9 @@ func (e *Editor) Render(width, height int) Rendered {
 		}
 		row := rows[i]
 		bg := e.cursorLineBG(row.line)
+		if row.image.ok() {
+			bg = nil
+		}
 		text, used := e.renderRow(row, classes, textWidth, bg)
 		out = append(out, gutter(row.line, e.cursor.Line, gw, row.start == 0 && !row.synthetic, bg)+text+trail(bg, textWidth-used))
 	}
@@ -275,7 +278,7 @@ func (e *Editor) imageRows(line int) []vrow {
 		return nil
 	}
 	end := e.buf.LineLen(line)
-	rows := make([]vrow, placement.Rows)
+	rows := make([]vrow, min(placement.Rows, MaxImageCells))
 	for r := range rows {
 		rows[r] = vrow{
 			line:  line,
