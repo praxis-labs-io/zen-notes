@@ -19,12 +19,20 @@ else, in a gutter that is always reserved so text never shifts.
 ## Install
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/praxis-labs-io/zen-notes/main/install.sh | sh
+```
+
+Downloads the binary for macOS or Linux, on arm64 or amd64, and needs nothing
+else. Windows takes the `.zip` off the
+[releases page](https://github.com/praxis-labs-io/zen-notes/releases), the
+installer being a POSIX script. On anything else, or to build it yourself:
+
+```sh
 go install github.com/praxis-labs-io/zen-notes@latest
 ```
 
-Go 1.26 or later, and no other runtime dependency. The binary lands in `$GOBIN`,
-or `$GOPATH/bin` if that is unset. [Install](docs/install.md) covers putting it
-somewhere else, and where your notes end up.
+That one needs Go 1.26 or later. [Install](docs/install.md) covers where the
+binary lands, where your notes end up, and upgrading.
 
 ## A first note
 
