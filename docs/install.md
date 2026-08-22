@@ -26,7 +26,7 @@ On a platform no release carries, the script says so and points you at Go.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/praxis-labs-io/zen-notes/main/install.sh | INSTALL_DIR=/usr/local/bin sh
-curl -fsSL https://raw.githubusercontent.com/praxis-labs-io/zen-notes/main/install.sh | VERSION=v0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/praxis-labs-io/zen-notes/main/install.sh | VERSION=v0.2.0 sh
 ```
 
 Every release carries a `checksums.txt` beside the archives if you want to
