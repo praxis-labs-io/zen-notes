@@ -153,7 +153,15 @@ jobs:
         #
         # No --title. Without --generate-notes gh titles the release from the
         # tag, which is what we want, and an H1 in the notes would repeat it.
+        #
+        # A tag carrying a suffix (v0.2.0-rc.1) is published as a pre-release,
+        # or it becomes the latest release install.sh hands to everyone.
         run: |
+          case "$GITHUB_REF_NAME" in
+          *-*) prerelease="--prerelease" ;;
+          *) prerelease="" ;;
+          esac
+
           gh release create "$GITHUB_REF_NAME" dist/* \
             --notes-file "docs/release-notes/${GITHUB_REF_NAME}.md" \
-            --verify-tag
+            --verify-tag $prerelease
