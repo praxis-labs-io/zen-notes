@@ -93,6 +93,9 @@ jobs:
           fi
 
           mkdir -p build dist
+          # MIT asks that the notice travel with the software, and an
+          # archive holding a bare binary does not carry it.
+          cp LICENSE build/
           # -trimpath so the archive does not carry the runner's paths, and the
           # version stamped in here is the only thing that sets it: a plain
           # go build reports dev.
@@ -104,9 +107,9 @@ jobs:
           # opens without reaching for anything.
           archive="dist/zen-notes_${version}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = "windows" ]; then
-            (cd build && zip -q "../${archive}.zip" "$binary")
+            (cd build && zip -q "../${archive}.zip" "$binary" LICENSE)
           else
-            tar -czf "${archive}.tar.gz" -C build "$binary"
+            tar -czf "${archive}.tar.gz" -C build "$binary" LICENSE
           fi
 
       - name: Upload
