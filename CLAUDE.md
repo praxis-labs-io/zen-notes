@@ -5,9 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repo is
 
 A one-note-per-day markdown TUI, at `praxis-labs-io/zen-notes` (`origin`). Open
-source, MIT. `README.md` is the user-facing description and the full keymap;
-`CONTRIBUTING.md` holds the scope rules and what has already been rejected.
-Read those rather than restating them here.
+source, MIT. `docs/` holds everything a user reads: the guide, the keymap and
+install. `docs/CONTRIBUTING.md` holds the scope rules and what has already been
+rejected, and `README.md` is the front page linking in. Read those rather than
+restating them here.
 
 **`main` is the product branch.** Feature work flows ticket → branch → PR on
 `origin` (see Project Management).
@@ -107,7 +108,7 @@ the notes directory.
 Breaking that is a review-stopper. A `tea.Msg` in `editor` or a `note.Store` in
 `editor` means the boundary went.
 
-`CONTRIBUTING.md` lists what lives in each file.
+`docs/CONTRIBUTING.md` lists what lives in each file.
 
 ### Invariants worth knowing before changing anything
 
