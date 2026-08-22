@@ -109,7 +109,7 @@ func (m *Model) syncImages() tea.Cmd {
 // imageBounds is the room an image may take: the note's text width, and half
 // the window, so an image never buries the note it belongs to.
 func (m *Model) imageBounds() (cols, rows int) {
-	gutter := editor.GutterWidth(m.ed.Buffer().LineCount())
+	gutter := editor.GutterWidth(m.ed.LineCount())
 	return min(m.width-gutter, editor.MaxImageCells), min(m.textHeight()/2, editor.MaxImageCells)
 }
 
