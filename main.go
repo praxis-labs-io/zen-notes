@@ -10,11 +10,20 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/praxis-labs-io/zen-notes/internal/app"
 	"github.com/praxis-labs-io/zen-notes/internal/note"
+	"github.com/praxis-labs-io/zen-notes/internal/version"
 )
 
 func main() {
 	dir := flag.String("dir", "", "notes directory (default $ZEN_NOTES_DIR, else ~/.zen-notes)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+
+	// A released binary is one somebody downloaded rather than built, so it has
+	// to be able to say which one it is. A source build reports dev.
+	if *showVersion {
+		fmt.Println("zen-notes version", version.Version)
+		return
+	}
 
 	if err := run(*dir); err != nil {
 		fmt.Fprintln(os.Stderr, "zen-notes:", err)
