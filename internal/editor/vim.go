@@ -193,6 +193,9 @@ func New(text string) *Editor {
 // Text is the current buffer contents.
 func (e *Editor) Text() string { return e.buf.Text() }
 
+// LineCount is how many lines the buffer holds, for a caller sizing the gutter.
+func (e *Editor) LineCount() int { return e.buf.LineCount() }
+
 // Cursor is where the caret sits.
 func (e *Editor) Cursor() Pos { return e.cursor }
 
