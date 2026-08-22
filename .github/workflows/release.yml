@@ -1,0 +1,156 @@
+# Release workflow for zen-notes
+# Builds the binaries for a version tag and cuts the GitHub release from them.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  GO_VERSION: "1.26"
+
+# Nothing here writes. The release job asks for more itself.
+permissions:
+  contents: read
+
+jobs:
+  # ci.yml runs on main and on pull requests, never on a tag, so without this
+  # a tag on an unmerged commit publishes from code nothing checked.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # First, so a tag cut ahead of its notes fails in seconds rather than
+      # after the race suite and five cross-compiles.
+      - name: Check the notes
+        run: |
+          notes="docs/release-notes/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$notes" ]; then
+            echo "No $notes in this tag. Notes are committed to main before the tag is cut." >&2
+            echo "Recover with: gh release create $GITHUB_REF_NAME dist/* --notes-file <path> --verify-tag" >&2
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Test
+        run: go test -race ./...
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: test
+    runs-on: ubuntu-latest
+
+    # Everything is pure Go, so one linux runner cross-compiles every target
+    # and there is no macOS runner in the bill. The set matches the one CI
+    # builds, windows/arm64 excluded there and so absent here.
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+
+          binary="zen-notes"
+          if [ "$GOOS" = "windows" ]; then
+            binary="zen-notes.exe"
+          fi
+
+          mkdir -p build dist
+          # -trimpath so the archive does not carry the runner's paths, and the
+          # version stamped in here is the only thing that sets it: a plain
+          # go build reports dev.
+          go build -trimpath \
+            -ldflags "-s -w -X github.com/praxis-labs-io/zen-notes/internal/version.Version=${version}" \
+            -o "build/${binary}" .
+
+          # zip for windows and tar for the rest, each being what that platform
+          # opens without reaching for anything.
+          archive="dist/zen-notes_${version}_${GOOS}_${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then
+            (cd build && zip -q "../${archive}.zip" "$binary")
+          else
+            tar -czf "${archive}.tar.gz" -C build "$binary"
+          fi
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: zen-notes_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    # The one job that writes, and only to the release.
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        # zen-notes_* rather than a list of extensions, so a new archive
+        # format cannot be left out of the checksums by omission.
+        run: cd dist && sha256sum zen-notes_* > checksums.txt
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # --verify-tag so a workflow triggered by anything but a real tag on
+        # this commit fails rather than inventing one. --notes-file rather than
+        # --generate-notes: a squash-per-PR history generates a list of every
+        # ticket ever merged, which is what v0.1.0 shipped with.
+        #
+        # No --title. Without --generate-notes gh titles the release from the
+        # tag, which is what we want, and an H1 in the notes would repeat it.
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --notes-file "docs/release-notes/${GITHUB_REF_NAME}.md" \
+            --verify-tag

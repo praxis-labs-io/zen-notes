@@ -34,9 +34,11 @@ after changes or Drew keeps running the old code:**
 GOBIN=$HOME/.local/bin go install .
 ```
 
-Releases are a pushed tag plus `gh release create`. `go install
-github.com/praxis-labs-io/zen-notes@latest` only resolves to a tagged version,
-so a release the users can install means a new tag.
+Releases are a pushed tag. `.github/workflows/release.yml` builds the five
+targets, writes the checksums, and cuts the release from
+`docs/release-notes/<tag>.md`, which has to be on `main` before the tag is cut.
+`go install github.com/praxis-labs-io/zen-notes@latest` only resolves to a
+tagged version, so a release the users can install still means a new tag.
 
 Anything published under Drew's name (PR bodies, issues, release notes, README)
 must be shown to him word-for-word before pushing. His voice: terse,

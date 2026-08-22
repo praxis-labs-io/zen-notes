@@ -134,6 +134,44 @@ Manual checks worth running for anything touching save, watch or layout:
   agree.
 - Light theme and dark theme, and a theme switch while the app is running.
 
+## Docs that describe the code
+
+Every user-facing surface has a document that describes it, and a change to the
+surface makes that document wrong until somebody moves it. This is the map, read
+at merge time and again before a release:
+
+| Changed | Read |
+| --- | --- |
+| `internal/editor/**` | [`keys.md`](keys.md) |
+| `internal/app/**` | [`keys.md`](keys.md), [`guide.md`](guide.md) |
+| `internal/note/**` | [`guide.md`](guide.md) |
+| `main.go`, `install.sh`, `.github/workflows/**` | [`install.md`](install.md), [`README.md`](../README.md) |
+| the test conventions, the layout | this file |
+
+`git diff --name-only <ref>..HEAD` gives the left column, so the set of documents
+to check is derived rather than remembered.
+
+A change nothing on this map covers is one of two things: a doc gap to fill, or
+work no user sees. Say which rather than leaving it unanswered.
+
+## Version numbers
+
+Semver, and pre-1.0 while the shape can still move:
+
+- **Minor** carries anything a user would notice. A new binding, a changed
+  default, a note that lands somewhere else.
+- **Patch** carries fixes and everything internal.
+- **Major** waits for 1.0.
+
+A published tag is permanent. It cannot be renumbered, and a release cut under
+the wrong number stays wrong, so the version is confirmed before the tag is
+pushed rather than inferred from the range.
+
+Releases are cut with the `release` skill, which curates
+`docs/release-notes/vX.Y.Z.md` and hands the tag command over. The notes file has
+to be on `main` before the tag is cut: the workflow reads it out of the tagged
+commit.
+
 ## Pull requests
 
 - One change per pull request. Do not bundle adjacent cleanup.
