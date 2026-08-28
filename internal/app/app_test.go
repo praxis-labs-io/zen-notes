@@ -56,6 +56,11 @@ func TestTranslateKey(t *testing.T) {
 		{"tab", tea.KeyPressMsg{Code: tea.KeyTab}, editor.Named("tab"), true},
 		{"shift tab", tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, editor.Named("backtab"), true},
 		{"up", tea.KeyPressMsg{Code: tea.KeyUp}, editor.Named("up"), true},
+		{"home", tea.KeyPressMsg{Code: tea.KeyHome}, editor.Named("home"), true},
+		{"end", tea.KeyPressMsg{Code: tea.KeyEnd}, editor.Named("end"), true},
+		{"page up", tea.KeyPressMsg{Code: tea.KeyPgUp}, editor.Named("pgup"), true},
+		{"page down", tea.KeyPressMsg{Code: tea.KeyPgDown}, editor.Named("pgdown"), true},
+		{"delete", tea.KeyPressMsg{Code: tea.KeyDelete}, editor.Named("delete"), true},
 		{"unknown modifier combo is dropped", tea.KeyPressMsg{Code: 'q', Mod: tea.ModAlt}, editor.Key{}, false},
 		{"unknown ctrl combo is dropped", tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl}, editor.Key{}, false},
 	}
@@ -306,6 +311,42 @@ func TestBraceMotionIsNotABrowseKey(t *testing.T) {
 	}
 	if m.ed.Cursor().Line != 1 {
 		t.Fatalf("cursor line = %d, want 1", m.ed.Cursor().Line)
+	}
+}
+
+// The five keys have to survive the whole path, not just translateKey: a
+// terminal keystroke through handleKey and into the buffer.
+func TestNavigationKeysReachTheBuffer(t *testing.T) {
+	m := newTestModel(t, "one two three")
+
+	press(m, "<end>")
+	if m.ed.Cursor().Col != 12 {
+		t.Fatalf("after End, col = %d, want 12", m.ed.Cursor().Col)
+	}
+
+	press(m, "<home>")
+	if m.ed.Cursor().Col != 0 {
+		t.Fatalf("after Home, col = %d, want 0", m.ed.Cursor().Col)
+	}
+
+	press(m, "<del>")
+	if m.ed.Text() != "ne two three" {
+		t.Fatalf("after Delete, Text = %q, want ne two three", m.ed.Text())
+	}
+}
+
+func TestPageKeysReachTheBuffer(t *testing.T) {
+	m := newTestModel(t, strings.Repeat("line\n", 99)+"line")
+
+	press(m, "<pgdown>")
+	down := m.ed.Cursor().Line
+	if down == 0 {
+		t.Fatal("PageDown did not move the cursor")
+	}
+
+	press(m, "<pgup>")
+	if m.ed.Cursor().Line != 0 {
+		t.Fatalf("after PageUp, line = %d, want back at 0", m.ed.Cursor().Line)
 	}
 }
 
@@ -1042,6 +1083,16 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "<c-v>":
 		return tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl}
+	case "<home>":
+		return tea.KeyPressMsg{Code: tea.KeyHome}
+	case "<end>":
+		return tea.KeyPressMsg{Code: tea.KeyEnd}
+	case "<pgup>":
+		return tea.KeyPressMsg{Code: tea.KeyPgUp}
+	case "<pgdown>":
+		return tea.KeyPressMsg{Code: tea.KeyPgDown}
+	case "<del>":
+		return tea.KeyPressMsg{Code: tea.KeyDelete}
 	}
 	r := []rune(k)[0]
 	// Match the terminal: a capital arrives lowercase in Code, shifted in Text.

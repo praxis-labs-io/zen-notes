@@ -10,7 +10,7 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `gj gk` | move by wrapped display row |
 | arrows | stand in for `hjkl`, counts and operators included |
 | `w W b B e E` | by word |
-| `0 ^ $` | line start, first non-blank, line end |
+| `0 ^ $`, `home end` | line start, first non-blank, line end |
 | `gg G`, `{ }` | buffer ends, paragraphs |
 | `f F t T` | find on the line |
 | `; ,` | repeat that find, forward and back |
@@ -20,10 +20,11 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `H M L` | top, middle, bottom of the window |
 | `zt zz zb` | scroll the cursor's line to top, centre, bottom |
 | `ctrl+d ctrl+u` | half page |
+| `pgup pgdn` | a page, two lines of overlap |
 | `i a I A o O` | insert |
 | `d c y` + motion, `dd cc yy` | operators |
 | `iw aw i" a( ip` | text objects, as in `ciw` |
-| `x X D C Y p P` | edit |
+| `x X D C Y p P`, `del` | edit |
 | `cmd+c`, terminal paste | copy a visual selection, paste the system clipboard |
 | `r s S` | replace a rune, substitute rune or line |
 | `tab shift+tab` in a list | nest or unnest an item and its children |
