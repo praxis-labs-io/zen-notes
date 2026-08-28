@@ -278,6 +278,33 @@ func (e *Editor) SetText(text string) {
 	e.refreshMatches()
 }
 
+// Reset drops everything anchored into the buffer — the half-typed command,
+// the command line, the visual range and the search — so a caller can swap
+// the note in underneath it. A caller does this alongside SetText, which
+// cannot do it itself because a reload must leave a typing user alone.
+//
+// Insert mode survives. It holds no position beyond the cursor, which the
+// caller sets anyway, and the day can roll over mid-sentence: dropping into
+// normal mode there turns the next keystrokes into commands on a note the
+// user did not ask to open. Every other mode carries state the new buffer
+// invalidates, so it goes.
+func (e *Editor) Reset() {
+	if e.mode != ModeInsert {
+		e.mode = ModeNormal
+	}
+	e.pend = pending{}
+	e.visualStart = Pos{}
+	e.lastVisual = [2]Pos{}
+	e.blockInsert = blockPending{}
+	e.flash = flashRange{}
+	e.cmdline = nil
+	e.lastFind = find{}
+	e.message = ""
+	e.clearSearch()
+	e.search.previous = ""
+	e.search.origin = Pos{}
+}
+
 // Selection is the visual range as an ordered pair, and whether it is
 // linewise. It is meaningless outside visual modes.
 func (e *Editor) Selection() (Pos, Pos, bool) {

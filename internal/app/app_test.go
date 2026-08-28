@@ -412,6 +412,15 @@ func TestDayRolloverSavesAndOpensTheNewDay(t *testing.T) {
 	if yesterday != "late" {
 		t.Fatalf("yesterday's note = %q, want late", yesterday)
 	}
+	// Midnight arrives mid-sentence. Dropping out of insert mode here would
+	// turn the next keystrokes into commands on a note nobody asked to open.
+	if m.ed.Mode() != editor.ModeInsert {
+		t.Fatalf("Mode = %v, want insert. The rollover ejected a typing user", m.ed.Mode())
+	}
+	press(m, "o", "n")
+	if m.ed.Text() != "on" {
+		t.Fatalf("Text = %q, want on. Typing after the rollover ran as commands", m.ed.Text())
+	}
 }
 
 func TestBrowsingStopsTheDayRollover(t *testing.T) {
@@ -485,6 +494,50 @@ func TestBrowsingForwardFollowsTheClockPastMidnight(t *testing.T) {
 	}
 	if !m.followToday {
 		t.Fatal("landed on the current day, but the midnight rollover stayed off")
+	}
+}
+
+// Changing day out from under a half-finished command would otherwise land on
+// the new note still in visual mode, anchored into a buffer that is gone.
+func TestOpeningAnotherDayResetsTheEditor(t *testing.T) {
+	m := newTestModel(t, "today")
+	past := m.day.Add(-2)
+	if err := m.store.Save(past, "older"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	press(m, "v", "j")
+	if m.ed.Mode() != editor.ModeVisual {
+		t.Fatalf("Mode = %v, want visual before the day change", m.ed.Mode())
+	}
+
+	m.open(past, false)
+
+	if m.ed.Mode() != editor.ModeNormal {
+		t.Fatalf("Mode = %v, want normal on the new note", m.ed.Mode())
+	}
+	if m.ed.Text() != "older" {
+		t.Fatalf("Text = %q, want older", m.ed.Text())
+	}
+}
+
+// Insert mode is the one mode that survives, because it anchors nothing into
+// the buffer that the swap invalidates.
+func TestOpeningAnotherDayKeepsInsertMode(t *testing.T) {
+	m := newTestModel(t, "today")
+	past := m.day.Add(-2)
+	if err := m.store.Save(past, "older"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	press(m, "i")
+
+	m.open(past, false)
+
+	if m.ed.Mode() != editor.ModeInsert {
+		t.Fatalf("Mode = %v, want insert", m.ed.Mode())
+	}
+	press(m, "h", "i")
+	if m.ed.Text() != "hiolder" {
+		t.Fatalf("Text = %q, want hiolder", m.ed.Text())
 	}
 }
 
