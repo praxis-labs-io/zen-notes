@@ -322,6 +322,7 @@ func (m *Model) open(day note.Day, follow bool) {
 	m.day = day
 	m.followToday = follow
 	m.lastWritten = text
+	m.ed.Reset()
 	m.ed.SetText(text)
 	m.ed.SetCursor(editor.Pos{})
 	m.clearStatus()
