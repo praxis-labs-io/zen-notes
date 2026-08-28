@@ -451,6 +451,16 @@ func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
 		return editor.Named("left"), true
 	case tea.KeyRight:
 		return editor.Named("right"), true
+	case tea.KeyHome:
+		return editor.Named("home"), true
+	case tea.KeyEnd:
+		return editor.Named("end"), true
+	case tea.KeyPgUp:
+		return editor.Named("pgup"), true
+	case tea.KeyPgDown:
+		return editor.Named("pgdown"), true
+	case tea.KeyDelete:
+		return editor.Named("delete"), true
 	}
 
 	if msg.Text != "" {

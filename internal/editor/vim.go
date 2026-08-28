@@ -439,8 +439,11 @@ func (e *Editor) insertKey(k Key) {
 	case "backtab":
 		e.shiftListItem(-1)
 		return
-	case "up", "down", "left", "right":
-		e.arrow(k.Name)
+	case "up", "down", "left", "right", "home", "end", "pgup", "pgdown":
+		e.insertMove(k.Name)
+		return
+	case "delete", "del":
+		e.forwardDelete()
 		return
 	case "":
 	default:
@@ -509,12 +512,18 @@ func (e *Editor) backspace() {
 	e.dirty = true
 }
 
-func (e *Editor) arrow(name string) {
+// insertMove is navigation from inside insert mode, where the caret may sit
+// one past the last rune and there is no operator to feed.
+func (e *Editor) insertMove(name string) {
 	switch name {
 	case "up":
 		e.moveVertical(-1)
 	case "down":
 		e.moveVertical(1)
+	case "pgup":
+		e.moveVertical(-e.pageSize())
+	case "pgdown":
+		e.moveVertical(e.pageSize())
 	case "left":
 		if e.cursor.Col > 0 {
 			e.cursor.Col--
@@ -524,7 +533,27 @@ func (e *Editor) arrow(name string) {
 		e.cursor.Col++
 		e.clampCursor()
 		e.desiredCol = e.cursor.Col
+	case "home":
+		e.cursor.Col = 0
+		e.desiredCol = 0
+	case "end":
+		e.cursor.Col = e.buf.LineLen(e.cursor.Line)
+		e.desiredCol = e.cursor.Col
 	}
+}
+
+// forwardDelete is Delete in insert mode: take the rune under the caret, or
+// pull the next line up when there is none.
+func (e *Editor) forwardDelete() {
+	if e.cursor == e.buf.End() {
+		return
+	}
+	to := e.forwardOne(e.cursor)
+	if to == e.cursor {
+		to = Pos{e.cursor.Line + 1, 0}
+	}
+	e.buf.Delete(e.cursor, to)
+	e.dirty = true
 }
 
 func (e *Editor) moveVertical(delta int) {
@@ -586,29 +615,35 @@ func (e *Editor) runCommand(cmd string) {
 
 func (e *Editor) normalKey(k Key) {
 	if k.Name != "" {
-		motion, ok := arrowMotion(k.Name)
+		stands, ok := namedKeyCommand(k.Name, e.mode)
 		if !ok {
 			e.namedNormalKey(k.Name)
 			return
 		}
-		// An arrow is never an argument, so it cancels a half-typed f or i.
+		// A navigation key is never an argument, so it cancels a half-typed
+		// f or i.
 		if e.pend.await != 0 {
 			e.pend = pending{}
 			return
 		}
-		k = Rune(motion)
-	}
-	r := k.R
-	if r == 0 {
+		e.runNormal(stands, false)
 		return
 	}
+	if k.R != 0 {
+		e.runNormal(k.R, true)
+	}
+}
+
+// runNormal dispatches one normal-mode key. countable is false for a key that
+// arrived named, where Home stands in for 0 and must not read as a count.
+func (e *Editor) runNormal(r rune, countable bool) {
 	e.pend.keys = append(e.pend.keys, r)
 
 	if e.pend.await != 0 {
 		e.resolveAwait(r)
 		return
 	}
-	if e.digit(r) {
+	if countable && e.digit(r) {
 		return
 	}
 	if e.operator(r) {
@@ -647,6 +682,10 @@ func (e *Editor) namedNormalKey(name string) {
 		e.halfPage(1)
 	case "c-u":
 		e.halfPage(-1)
+	case "pgup":
+		e.page(-1)
+	case "pgdown":
+		e.page(1)
 	case "c-r":
 		e.restore(&e.redo, &e.undo)
 	case "c-v":
@@ -659,9 +698,13 @@ func (e *Editor) namedNormalKey(name string) {
 	}
 }
 
-// arrowMotion maps an arrow key onto the hjkl it stands in for, so counts,
-// operators and visual mode work the same either way.
-func arrowMotion(name string) (rune, bool) {
+// namedKeyCommand maps a navigation key onto the normal-mode key it stands in
+// for, so counts, operators and visual mode work the same either way. Home and
+// End are motions, which is what makes d<End> and v<Home> fall out for free.
+//
+// Delete cuts the selection in visual mode, as vim does. It cannot ride on x
+// there, because ours still takes only the rune under the caret.
+func namedKeyCommand(name string, mode Mode) (rune, bool) {
 	switch name {
 	case "up":
 		return 'k', true
@@ -671,12 +714,30 @@ func arrowMotion(name string) (rune, bool) {
 		return 'h', true
 	case "right":
 		return 'l', true
+	case "home":
+		return '0', true
+	case "end":
+		return '$', true
+	case "delete", "del":
+		if mode.Visual() {
+			return 'd', true
+		}
+		return 'x', true
 	}
 	return 0, false
 }
 
 func (e *Editor) halfPage(dir int) {
 	e.moveVertical(dir * max(e.height/2, 1))
+	e.pend = pending{}
+}
+
+// pageSize is a screenful less the two lines vim's C-f and C-b keep on screen
+// to carry the reader across the jump.
+func (e *Editor) pageSize() int { return max(e.height-2, 1) }
+
+func (e *Editor) page(dir int) {
+	e.moveVertical(dir * e.pageSize())
 	e.pend = pending{}
 }
 
