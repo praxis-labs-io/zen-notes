@@ -73,22 +73,22 @@ func (b *Buffer) runes(i int) []rune {
 	return b.lines[i]
 }
 
-// Lines snapshots the buffer for the undo stack.
+// Lines snapshots the buffer for the undo stack. The lines themselves are
+// shared, not copied: every mutator here replaces a line header rather than
+// writing through it, so a snapshot never sees a later edit.
 func (b *Buffer) Lines() [][]rune {
-	out := make([][]rune, len(b.lines))
-	for i, l := range b.lines {
-		out[i] = append([]rune(nil), l...)
-	}
-	return out
+	return slices.Clone(b.lines)
 }
 
-// SetLines restores a snapshot taken with Lines.
+// SetLines restores a snapshot taken with Lines. It clones the outer slice so
+// the restored buffer owns its array outright: Insert and Delete assign a new
+// header in place, and a caller that still holds the snapshot must not see it.
 func (b *Buffer) SetLines(lines [][]rune) {
 	if len(lines) == 0 {
 		b.lines = [][]rune{{}}
 		return
 	}
-	b.lines = lines
+	b.lines = slices.Clone(lines)
 }
 
 // Clamp moves p to the nearest valid position in the buffer.
