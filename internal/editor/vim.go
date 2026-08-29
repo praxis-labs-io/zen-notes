@@ -739,7 +739,9 @@ func (e *Editor) halfPage(dir int) {
 }
 
 // pageSize is a screenful less the two lines vim's C-f and C-b keep on screen
-// to carry the reader across the jump.
+// to carry the reader across the jump. It counts logical lines, as halfPage
+// does, so a wrapped paragraph still moves further than one screen and the
+// overlap does not hold. ZNN-28 moves both onto display rows.
 func (e *Editor) pageSize() int { return max(e.height-2, 1) }
 
 func (e *Editor) page(dir int) {
