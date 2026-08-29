@@ -20,7 +20,7 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 | `H M L` | top, middle, bottom of the window |
 | `zt zz zb` | scroll the cursor's line to top, centre, bottom |
 | `ctrl+d ctrl+u` | half page |
-| `pgup pgdn` | a page, two lines of overlap |
+| `pgup pgdn` | a page |
 | `i a I A o O` | insert |
 | `d c y` + motion, `dd cc yy` | operators |
 | `iw aw i" a( ip` | text objects, as in `ciw` |
