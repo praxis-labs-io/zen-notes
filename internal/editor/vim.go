@@ -274,6 +274,12 @@ func (e *Editor) SetText(text string) {
 	e.cursor = e.buf.Clamp(e.cursor)
 	e.clampCursor()
 	e.undo, e.redo = nil, nil
+	// The swap can land mid-insert, and it takes the stack that entering
+	// insert mode built with it. Seed a new one so undo has somewhere to
+	// land rather than doing nothing until the user leaves insert mode.
+	if e.mode == ModeInsert {
+		e.undo = append(e.undo, snapshot{lines: e.buf.Lines(), cursor: e.cursor})
+	}
 	e.dirty = false
 	e.refreshMatches()
 }

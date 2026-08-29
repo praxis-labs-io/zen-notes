@@ -462,6 +462,32 @@ func TestDayRolloverSavesAndOpensTheNewDay(t *testing.T) {
 	if m.ed.Text() != "on" {
 		t.Fatalf("Text = %q, want on. Typing after the rollover ran as commands", m.ed.Text())
 	}
+	// The swap cleared the stack that i built, so undo needs a fresh point
+	// or the new day's first insert session cannot be taken back.
+	press(m, "<esc>", "u")
+	if m.ed.Text() != "" {
+		t.Fatalf("Text = %q, want empty. Undo had nothing to land on", m.ed.Text())
+	}
+}
+
+// reload swaps the buffer through the same SetText, and it can land on a
+// clean buffer while the user is mid-insert.
+func TestReloadKeepsAnUndoPointForATypingUser(t *testing.T) {
+	m := newTestModel(t, "original")
+	press(m, "i")
+	// Entering insert mode dirties the buffer; the autosave clears it, and a
+	// clean buffer is what reload actually overwrites.
+	m.Update(tickMsg{})
+	writeFromElsewhere(t, m, "from the other terminal")
+	m.Update(fileChangedMsg(m.store.Path(m.day)))
+
+	if m.ed.Text() != "from the other terminal" {
+		t.Fatalf("Text = %q, want the disk copy", m.ed.Text())
+	}
+	press(m, "z", "<esc>", "u")
+	if m.ed.Text() != "from the other terminal" {
+		t.Fatalf("Text = %q, want the typed z undone", m.ed.Text())
+	}
 }
 
 func TestBrowsingStopsTheDayRollover(t *testing.T) {
