@@ -100,13 +100,6 @@ mv -f "$staged" "$INSTALL_DIR/$BINARY"
 
 echo "Installed $INSTALL_DIR/$BINARY"
 
-# A warning and not a refusal. The install worked; it is the first run that
-# will not, and somebody about to install git should not be turned away here.
-if ! command -v git >/dev/null 2>&1; then
-	echo
-	echo "git is not on PATH. zen-notes shells out to it for everything it reads."
-fi
-
 case ":$PATH:" in
 *":$INSTALL_DIR:"*) ;;
 *)
