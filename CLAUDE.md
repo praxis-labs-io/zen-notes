@@ -21,7 +21,8 @@ Two things skip the PR and commit straight to `main`:
 A tracked pre-push hook rejects pushes to `main`, so an agent commits these and
 Drew pushes them. Don't reach for `--no-verify`.
 
-There is no Makefile; the checks are plain `go` commands.
+A `Makefile` wraps the checks, matching the one in zen-linear, zen-octo and
+zen-review. It is a convenience over plain `go` commands, not a build system.
 
 CI is `.github/workflows/ci.yml`: lint and format, test, and a cross-compile
 matrix, on pushes to `main` and non-draft PRs. It runs the same checks listed
@@ -31,7 +32,7 @@ The installed binary is built from here to `~/.local/bin/zen-notes`. **Rebuild
 after changes or Drew keeps running the old code:**
 
 ```sh
-GOBIN=$HOME/.local/bin go install .
+make install
 ```
 
 Releases are a pushed tag. `.github/workflows/release.yml` builds the five
@@ -55,17 +56,22 @@ creates drift.
 ## Commands
 
 ```sh
-go build ./...
-go test -race ./...
-go vet ./...
-gofmt -l .                                      # prints nothing on a pass
-golangci-lint run ./...
-go mod tidy && git diff --exit-code go.mod go.sum
+make all                                        # lint, test, build
+make lint                                       # gofmt, mod-tidy, vet, golangci-lint
+make test                                       # go test -race, with coverage
+make install                                    # build into ~/.local/bin
+make help                                       # every target
+```
+
+`make all` clean before anything is committed. It runs what CI runs, minus the
+cross-compile matrix.
+
+Single tests still go through `go` directly:
+
+```sh
 go test ./internal/editor -run TestName         # single test
 go test ./internal/editor -run 'CursorLine'     # a group, by regexp
 ```
-
-All of those clean before anything is committed.
 
 Run checks directly, never through a pipe that swallows exit codes. `gofmt -l .`
 exits 0 even when it lists files, and `golangci-lint run | tail` reports success

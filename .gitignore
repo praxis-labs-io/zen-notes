@@ -1,4 +1,5 @@
 /zen-notes
+/coverage.out
 
 # Claude Code local settings
 .claude/settings.local.json

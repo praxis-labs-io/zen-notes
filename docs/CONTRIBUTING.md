@@ -6,16 +6,12 @@ read first is the scope section at the bottom.
 ## Build and test
 
 ```
-go build ./...
-go test -race ./...
-go vet ./...
-gofmt -l .
-golangci-lint run ./...
-go mod tidy && git diff --exit-code go.mod go.sum
+make all
 ```
 
-All of those should be clean before you open a pull request. `gofmt -l .`
-printing nothing is the pass.
+That runs gofmt, `go mod tidy`, `go vet`, golangci-lint, the race-enabled
+tests, and a build. `make help` lists every target. It should be clean before
+you open a pull request.
 
 CI runs the same checks plus a cross-compile over darwin, linux and windows,
 on amd64 and arm64. golangci-lint is pinned in the workflow; if your local
@@ -24,7 +20,7 @@ version differs you will see findings CI does not, or the reverse.
 To try your build:
 
 ```
-GOBIN=$HOME/.local/bin go install .
+make install
 ZEN_NOTES_DIR=/tmp/zn zen-notes
 ```
 
