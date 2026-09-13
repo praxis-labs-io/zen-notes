@@ -190,7 +190,7 @@ func fitImage(path string, cellW, cellH, maxCols, maxRows int) (cols, rows int, 
 	if err != nil {
 		return 0, 0, fmt.Errorf("open image: %w", err)
 	}
-	defer f.Close() //nolint:errcheck // read-only, and the config is already out
+	defer func() { _ = f.Close() }()
 
 	cfg, _, err := image.DecodeConfig(f)
 	if err != nil {
@@ -247,7 +247,7 @@ func isPNG(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close() //nolint:errcheck // read-only probe
+	defer func() { _ = f.Close() }()
 	_, err = png.DecodeConfig(f)
 	return err == nil
 }
@@ -257,7 +257,7 @@ func decodeImage(path string) (image.Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open image: %w", err)
 	}
-	defer f.Close() //nolint:errcheck // read-only
+	defer func() { _ = f.Close() }()
 
 	img, _, err := image.Decode(f)
 	if err != nil {
