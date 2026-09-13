@@ -17,11 +17,9 @@ import (
 	"github.com/praxis-labs-io/zen-notes/internal/editor"
 )
 
-// maxImageID is the highest id we hand out. Ids ride in an 8-bit foreground
-// colour so a colour profile that downsamples cannot corrupt them.
+// Ids ride in an 8-bit foreground colour, so a colour profile that downsamples cannot corrupt them.
 const maxImageID = 255
 
-// imageEntry is a note reference we resolved, measured and transmitted.
 type imageEntry struct {
 	id               int
 	path             string
@@ -31,15 +29,10 @@ type imageEntry struct {
 	editor.ImagePlacement
 }
 
-// bound reports whether the entry was fitted to the same room it is being
-// asked about, so an unchanged file can skip re-reading its header.
 func (e imageEntry) bound(maxCols, maxRows int) bool {
 	return e.maxCols == maxCols && e.maxRows == maxRows
 }
 
-// images holds what the terminal is currently showing, keyed by the target as
-// it is written in the note. Cell size stays zero until the terminal answers
-// the size query, and images stay off until it does.
 type images struct {
 	cellW, cellH int
 	entries      map[string]imageEntry
@@ -50,14 +43,8 @@ func newImages() *images {
 	return &images{entries: map[string]imageEntry{}, nextID: 1}
 }
 
-// supported reports whether the terminal told us how big a cell is, which is
-// the only capability check we get and the only number the fit needs.
 func (i *images) supported() bool { return i.cellW > 0 && i.cellH > 0 }
 
-// sync brings the terminal in line with the note: it resolves every reference,
-// transmits what is new or changed, forgets what the note no longer mentions,
-// and hands the editor the placements to reserve rows for. It returns nil when
-// nothing changed, which is the usual case.
 func (m *Model) syncImages() tea.Cmd {
 	if !m.images.supported() {
 		return nil
@@ -65,8 +52,6 @@ func (m *Model) syncImages() tea.Cmd {
 
 	maxCols, maxRows := m.imageBounds()
 	if maxCols <= 0 || maxRows <= 0 {
-		// No room to draw in. Stale placements would reserve rows sized for
-		// a window that is gone.
 		m.ed.SetImages(nil)
 		return nil
 	}
@@ -106,15 +91,11 @@ func (m *Model) syncImages() tea.Cmd {
 	return tea.Raw(strings.Join(seqs, ""))
 }
 
-// imageBounds is the room an image may take: the note's text width, and half
-// the window, so an image never buries the note it belongs to.
 func (m *Model) imageBounds() (cols, rows int) {
 	gutter := editor.GutterWidth(m.ed.LineCount())
 	return min(m.width-gutter, editor.MaxImageCells), min(m.textHeight()/2, editor.MaxImageCells)
 }
 
-// resolve returns the placement for a target, transmitting the image when it
-// is new, has changed on disk, or no longer fits the space available.
 func (i *images) resolve(target, dir string, maxCols, maxRows int) (imageEntry, string, error) {
 	path, err := resolveImagePath(target, dir)
 	if err != nil {
@@ -165,10 +146,6 @@ func (i *images) resolve(target, dir string, maxCols, maxRows int) (imageEntry, 
 	return entry, seq, nil
 }
 
-// claimID reuses a target's id so a resize replaces the image in place rather
-// than filling the terminal's store with copies. A wrapped counter would hand
-// out an id another entry still holds, and transmitting over it would show
-// that entry the wrong picture.
 func (i *images) claimID(target string) int {
 	if was, ok := i.entries[target]; ok {
 		return was.id
@@ -187,8 +164,7 @@ func (i *images) claimID(target string) int {
 	return i.nextID
 }
 
-// resolveImagePath turns a note's target into a local file. Nothing that
-// names a host is accepted; notes never reach the network.
+// A one-letter scheme is a Windows drive letter, not a URL.
 func resolveImagePath(target, dir string) (string, error) {
 	if target == "" {
 		return "", fmt.Errorf("empty image target")
@@ -209,8 +185,6 @@ func resolveImagePath(target, dir string) (string, error) {
 	return filepath.Clean(target), nil
 }
 
-// fitImage scales an image into at most maxCols by maxRows cells, keeping its
-// aspect ratio. Only the header is read, never the pixels.
 func fitImage(path string, cellW, cellH, maxCols, maxRows int) (cols, rows int, err error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -238,10 +212,7 @@ func fitImage(path string, cellW, cellH, maxCols, maxRows int) (cols, rows int, 
 
 func ceilDiv(a, b int) int { return (a + b - 1) / b }
 
-// transmitImage builds the sequence that sends the image and creates its
-// virtual placement. A PNG is sent as a path, so its bytes never cross the
-// tty; anything else is re-encoded, because PNG is the only format the
-// protocol compresses.
+// Kitty takes no encoded format but PNG, so a PNG goes by path and anything else is re-encoded and sent inline.
 func transmitImage(e imageEntry) (string, error) {
 	o := &kitty.Options{
 		Action:           kitty.TransmitAndPut,
@@ -295,8 +266,6 @@ func decodeImage(path string) (image.Image, error) {
 	return img, nil
 }
 
-// deleteImage drops an image from the terminal's store, so ids do not leak
-// when a note stops mentioning a file.
 func deleteImage(id int) string {
 	var sb strings.Builder
 	o := &kitty.Options{

@@ -1,5 +1,4 @@
-// Package app wires the editor, the day store and the file watcher into a
-// Bubble Tea program.
+// Package app runs the note editor as a Bubble Tea program.
 package app
 
 import (
@@ -14,37 +13,25 @@ import (
 	"github.com/praxis-labs-io/zen-notes/internal/note"
 )
 
-// saveInterval is how often a dirty buffer reaches disk. Short enough that a
-// second window feels live, long enough not to write on every keystroke.
 const saveInterval = 500 * time.Millisecond
 
 type tickMsg struct{}
 
-// statusTicks is how many save ticks a flash message survives, a little over
-// three seconds. It expires on its own because whatever set it may be the
-// last thing to happen for a while.
 const statusTicks = 7
 
-// flashDuration is how long a yank stays lit. Long enough to catch, short
-// enough that it never feels like a selection you have to dismiss.
 const flashDuration = 110 * time.Millisecond
 
-// fileChangedMsg carries the path a watcher saw change.
 type fileChangedMsg string
 
-// yankFlashDoneMsg puts out the highlight over a yank.
 type yankFlashDoneMsg struct{}
 
-// linkOpenedMsg reports that the operating system accepted a link.
 type linkOpenedMsg struct{ request int }
 
-// linkOpenFailedMsg reports that the operating system rejected a link.
 type linkOpenFailedMsg struct {
 	request int
 	err     error
 }
 
-// reloadDecision is what to do about a note changing underneath us.
 type reloadDecision int
 
 const (
@@ -53,8 +40,7 @@ const (
 	reloadKeepLocal
 )
 
-// decideReload compares the disk copy against what we last wrote. Our own
-// save comes back through the watcher and must not reload over the cursor.
+// Our own save comes back through the watcher, so a disk copy matching what we last wrote is ignored.
 func decideReload(disk, ours string, dirty bool) reloadDecision {
 	if disk == ours {
 		return reloadIgnore
@@ -65,7 +51,6 @@ func decideReload(disk, ours string, dirty bool) reloadDecision {
 	return reloadApply
 }
 
-// Model is the running app: one day's note, open for editing.
 type Model struct {
 	store *note.Store
 	watch *note.Watcher
@@ -85,8 +70,7 @@ type Model struct {
 	linkRequest   int
 }
 
-// NewModel opens today's note. The watcher may be nil, in which case the note
-// is never reloaded from disk.
+// NewModel opens today's note. A nil watcher means the note is never reloaded from disk.
 func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 	day := note.Today()
 	text, err := s.Load(day)
@@ -109,8 +93,6 @@ func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 }
 
 func (m *Model) Init() tea.Cmd {
-	// WindowOp 16 asks for the cell size in pixels. A terminal that never
-	// answers gets no images, and the markdown stays text.
 	return tea.Batch(tick(), waitForChange(m.watch), tea.RequestBackgroundColor,
 		tea.Raw(ansi.WindowOp(16)))
 }
@@ -119,7 +101,6 @@ func tick() tea.Cmd {
 	return tea.Tick(saveInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
-// waitForChange blocks on the watcher until a note changes.
 func waitForChange(w *note.Watcher) tea.Cmd {
 	if w == nil {
 		return nil
@@ -149,7 +130,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.FocusMsg:
-		// The theme may have changed while we were in the background.
 		return m, tea.RequestBackgroundColor
 
 	case yankFlashDoneMsg:
@@ -171,7 +151,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.ed.SetHeight(m.textHeight())
-		// A font size change moves the cell size and the window together.
 		return m, tea.Raw(ansi.WindowOp(16))
 
 	case tickMsg:
@@ -263,8 +242,6 @@ func (m *Model) openLinkCmd(target string) tea.Cmd {
 	}
 }
 
-// browseKey handles the day navigation keys, reporting whether it took the
-// keystroke. These are only live in normal mode so they stay typable.
 func (m *Model) browseKey(key editor.Key) bool {
 	if key.Name != "" {
 		return false
@@ -284,8 +261,7 @@ func (m *Model) browseKey(key editor.Key) bool {
 	return true
 }
 
-// nextDay is the next saved day, falling back to today. Today has no file
-// until it is edited, so Store.Next alone strands a browser in the past.
+// Today has no file until it is edited, so Store.Next alone strands a browser in the past.
 func (m *Model) nextDay(d note.Day) (note.Day, bool, error) {
 	day, ok, err := m.store.Next(d)
 	if err != nil || ok {
@@ -295,7 +271,6 @@ func (m *Model) nextDay(d note.Day) (note.Day, bool, error) {
 	return today, d.Before(today), nil
 }
 
-// step moves to an adjacent day that has a note, saving the current one first.
 func (m *Model) step(find func(note.Day) (note.Day, bool, error), missing string) {
 	m.save()
 	day, ok, err := find(m.day)
@@ -310,8 +285,6 @@ func (m *Model) step(find func(note.Day) (note.Day, bool, error), missing string
 	m.open(day, day == m.now())
 }
 
-// open switches to another day. follow marks whether the app should still
-// roll over at midnight.
 func (m *Model) open(day note.Day, follow bool) {
 	m.save()
 	text, err := m.store.Load(day)
@@ -328,7 +301,6 @@ func (m *Model) open(day note.Day, follow bool) {
 	m.clearStatus()
 }
 
-// setStatus shows a flash message and starts its countdown.
 func (m *Model) setStatus(s string) {
 	m.status = s
 	m.statusLeft = statusTicks
@@ -339,7 +311,6 @@ func (m *Model) clearStatus() {
 	m.statusLeft = 0
 }
 
-// expireStatus counts a flash down and drops it when it runs out.
 func (m *Model) expireStatus() {
 	if m.statusLeft == 0 {
 		return
@@ -369,8 +340,6 @@ func (m *Model) save() {
 	m.ed.MarkSaved()
 }
 
-// checkRollover moves to the new day once midnight passes, unless the user
-// has browsed away from today.
 func (m *Model) checkRollover() {
 	if !m.followToday {
 		return
@@ -380,7 +349,6 @@ func (m *Model) checkRollover() {
 	}
 }
 
-// reload takes the disk copy when another instance wrote the note we have open.
 func (m *Model) reload(path string) {
 	if filepath.Base(path) != filepath.Base(m.store.Path(m.day)) {
 		return
@@ -413,8 +381,7 @@ func (m *Model) quit() tea.Cmd {
 	return tea.Quit
 }
 
-// translateKey converts a Bubble Tea keystroke into an editor key, reporting
-// false for combinations the editor has no use for.
+// Shift is not rejected as a modifier: a capital arrives with ModShift set and the capital already in Text.
 func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
 	if msg.Mod == tea.ModSuper && msg.Code == 'c' {
 		return editor.Named("copy"), true
@@ -426,7 +393,6 @@ func translateKey(msg tea.KeyPressMsg) (editor.Key, bool) {
 		}
 		return editor.Key{}, false
 	}
-	// Shift is not a modifier here: the capital is already in Text.
 	if msg.Mod&^tea.ModShift != 0 {
 		return editor.Key{}, false
 	}

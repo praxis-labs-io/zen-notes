@@ -8,8 +8,7 @@ import (
 	"strings"
 )
 
-// validWebLink accepts only absolute web URLs. Other schemes stay inert even
-// if the operating system has registered a handler for them.
+// Other schemes stay inert even when the operating system has a handler registered for them.
 func validWebLink(target string) error {
 	u, err := url.Parse(target)
 	if err != nil || u.Host == "" || (!strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https")) {
@@ -26,8 +25,6 @@ func systemOpenLink(target string) error {
 	return cmd.Run()
 }
 
-// linkCommand uses argument vectors rather than a shell, so link text can
-// never be interpreted as a command.
 func linkCommand(goos, target string) (*exec.Cmd, error) {
 	switch goos {
 	case "darwin":

@@ -44,7 +44,6 @@ func TestTranslateKey(t *testing.T) {
 		ok   bool
 	}{
 		{"letter", tea.KeyPressMsg{Text: "a", Code: 'a'}, editor.Rune('a'), true},
-		// A shifted letter arrives lowercase in Code with the capital in Text.
 		{"shifted letter", tea.KeyPressMsg{Text: "A", Code: 'a', Mod: tea.ModShift}, editor.Rune('A'), true},
 		{"space", tea.KeyPressMsg{Text: " ", Code: ' '}, editor.Rune(' '), true},
 		{"ctrl d", tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}, editor.Named("c-d"), true},
@@ -302,7 +301,6 @@ func TestBracketsBrowseDaysOnlyInNormalMode(t *testing.T) {
 	}
 }
 
-// { and } are shift+[ and shift+], so they must not trip the browse keys.
 func TestBraceMotionIsNotABrowseKey(t *testing.T) {
 	m := newTestModel(t, "a\n\nb")
 	press(m, "}")
@@ -314,8 +312,6 @@ func TestBraceMotionIsNotABrowseKey(t *testing.T) {
 	}
 }
 
-// The five keys have to survive the whole path, not just translateKey: a
-// terminal keystroke through handleKey and into the buffer.
 func TestNavigationKeysReachTheBuffer(t *testing.T) {
 	m := newTestModel(t, "one two three")
 
@@ -453,8 +449,6 @@ func TestDayRolloverSavesAndOpensTheNewDay(t *testing.T) {
 	if yesterday != "late" {
 		t.Fatalf("yesterday's note = %q, want late", yesterday)
 	}
-	// Midnight arrives mid-sentence. Dropping out of insert mode here would
-	// turn the next keystrokes into commands on a note nobody asked to open.
 	if m.ed.Mode() != editor.ModeInsert {
 		t.Fatalf("Mode = %v, want insert. The rollover ejected a typing user", m.ed.Mode())
 	}
@@ -462,21 +456,15 @@ func TestDayRolloverSavesAndOpensTheNewDay(t *testing.T) {
 	if m.ed.Text() != "on" {
 		t.Fatalf("Text = %q, want on. Typing after the rollover ran as commands", m.ed.Text())
 	}
-	// The swap cleared the stack that i built, so undo needs a fresh point
-	// or the new day's first insert session cannot be taken back.
 	press(m, "<esc>", "u")
 	if m.ed.Text() != "" {
 		t.Fatalf("Text = %q, want empty. Undo had nothing to land on", m.ed.Text())
 	}
 }
 
-// reload swaps the buffer through the same SetText, and it can land on a
-// clean buffer while the user is mid-insert.
 func TestReloadKeepsAnUndoPointForATypingUser(t *testing.T) {
 	m := newTestModel(t, "original")
 	press(m, "i")
-	// Entering insert mode dirties the buffer; the autosave clears it, and a
-	// clean buffer is what reload actually overwrites.
 	m.Update(tickMsg{})
 	writeFromElsewhere(t, m, "from the other terminal")
 	m.Update(fileChangedMsg(m.store.Path(m.day)))
@@ -564,8 +552,6 @@ func TestBrowsingForwardFollowsTheClockPastMidnight(t *testing.T) {
 	}
 }
 
-// Changing day out from under a half-finished command would otherwise land on
-// the new note still in visual mode, anchored into a buffer that is gone.
 func TestOpeningAnotherDayResetsTheEditor(t *testing.T) {
 	m := newTestModel(t, "today")
 	past := m.day.Add(-2)
@@ -587,8 +573,6 @@ func TestOpeningAnotherDayResetsTheEditor(t *testing.T) {
 	}
 }
 
-// Insert mode is the one mode that survives, because it anchors nothing into
-// the buffer that the swap invalidates.
 func TestOpeningAnotherDayKeepsInsertMode(t *testing.T) {
 	m := newTestModel(t, "today")
 	past := m.day.Add(-2)
@@ -721,7 +705,7 @@ func TestCursorPerMode(t *testing.T) {
 	tests := []struct {
 		name  string
 		keys  []string
-		bar   string // status bar text, so a row that never reached the mode fails
+		bar   string
 		shape tea.CursorShape
 		blink bool
 	}{
@@ -755,7 +739,6 @@ func TestCursorPerMode(t *testing.T) {
 	}
 }
 
-// A nil color leaves the terminal's own cursor color alone, which is the point.
 func TestCursorTakesTheTerminalColor(t *testing.T) {
 	m := newTestModel(t, "hello")
 	if c := m.View().Cursor; c == nil || c.Color != nil {
@@ -793,8 +776,6 @@ func TestCursorMovesToTheCommandLine(t *testing.T) {
 	}
 }
 
-// A status message is a flash: it has to clear itself, because the thing
-// that set it may be the last thing that happens for a long while.
 func TestStatusExpiresOnItsOwn(t *testing.T) {
 	m := newTestModel(t, "original")
 	writeFromElsewhere(t, m, "from elsewhere")
@@ -804,7 +785,6 @@ func TestStatusExpiresOnItsOwn(t *testing.T) {
 		t.Fatalf("status = %q, want reloaded", m.status)
 	}
 
-	// Idle: nothing but the save tick, no keys pressed.
 	for range statusTicks {
 		m.Update(tickMsg{})
 	}
@@ -875,8 +855,6 @@ func TestMovingDoesNotScheduleAFlash(t *testing.T) {
 	}
 }
 
-// The terminal theme can change while the app is running, so the background
-// is asked for again rather than only at startup.
 func TestBackgroundIsRequeriedOnFocus(t *testing.T) {
 	m := newTestModel(t, "hello")
 	if _, cmd := m.Update(tea.FocusMsg{}); cmd == nil {
@@ -992,8 +970,6 @@ func TestHelpModalOpensAndCloses(t *testing.T) {
 	}
 }
 
-// The binding list is the whole point of the modal, so none of it may be
-// clipped at the sizes a note gets written in.
 func TestHelpFitsWithoutClipping(t *testing.T) {
 	for _, size := range [][2]int{{72, 20}, {80, 24}, {90, 24}, {100, 30}, {120, 40}} {
 		m := newTestModel(t, "")
@@ -1014,8 +990,6 @@ func TestHelpFitsWithoutClipping(t *testing.T) {
 	}
 }
 
-// Under 60 columns the help drops to one column, joining both lists. Every
-// group has to survive the join.
 func TestNarrowHelpKeepsEveryGroup(t *testing.T) {
 	m := newTestModel(t, "")
 	m.Update(tea.WindowSizeMsg{Width: 50, Height: 40})
@@ -1072,8 +1046,6 @@ func TestViewMarksUnsavedEdits(t *testing.T) {
 	}
 }
 
-// --- helpers ---
-
 func newTestModel(t *testing.T, text string) *Model {
 	t.Helper()
 	s, err := note.New(t.TempDir())
@@ -1100,7 +1072,6 @@ func press(m *Model, keys ...string) {
 	}
 }
 
-// keyMsg builds a keystroke, taking <name> for the named keys.
 func keyMsg(k string) tea.KeyPressMsg {
 	switch k {
 	case "<esc>":
@@ -1121,7 +1092,6 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyDelete}
 	}
 	r := []rune(k)[0]
-	// Match the terminal: a capital arrives lowercase in Code, shifted in Text.
 	if unicode.IsUpper(r) {
 		return tea.KeyPressMsg{Text: k, Code: unicode.ToLower(r), Mod: tea.ModShift}
 	}
@@ -1139,7 +1109,6 @@ func writeFromElsewhere(t *testing.T, m *Model, text string) {
 	}
 }
 
-// contains ignores styling, so an inverted cursor rune does not split a word.
 func contains(haystack, needle string) bool {
 	return strings.Contains(ansi.Strip(haystack), needle)
 }
