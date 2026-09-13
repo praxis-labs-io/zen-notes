@@ -197,8 +197,6 @@ func TestNextSkipsDaysWithoutNotes(t *testing.T) {
 	}
 }
 
-// Prev and Next work from a day with no note of its own, so today still
-// navigates backward before it has been saved.
 func TestPrevNextFromUnsavedDay(t *testing.T) {
 	s := newTestStore(t)
 	for _, d := range []Day{{2026, time.July, 4}, {2026, time.September, 1}} {
