@@ -1,5 +1,4 @@
-// Command zen-notes opens today's note. One markdown file per day, edited with
-// vim motions, autosaved, and reloaded when another window writes it.
+// Command zen-notes opens today's note for editing.
 package main
 
 import (
@@ -18,8 +17,6 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
-	// A released binary is one somebody downloaded rather than built, so it has
-	// to be able to say which one it is. A source build reports dev.
 	if *showVersion {
 		fmt.Println("zen-notes version", version.Version)
 		return
