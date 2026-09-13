@@ -3,55 +3,66 @@
 Thanks for looking. zen-notes is small on purpose, so the most useful thing to
 read first is the scope section at the bottom.
 
-## Build and test
+## Setup
 
 ```
-make all
-```
-
-That runs gofmt, `go mod tidy`, `go vet`, golangci-lint, the race-enabled
-tests, and a build. `make help` lists every target. It should be clean before
-you open a pull request.
-
-CI runs the same checks plus a cross-compile over darwin, linux and windows,
-on amd64 and arm64. golangci-lint is pinned in the workflow; if your local
-version differs you will see findings CI does not, or the reverse.
-
-To try your build:
-
-```
+git clone https://github.com/praxis-labs-io/zen-notes.git
+cd zen-notes
+git config core.hooksPath .githooks
 make install
+```
+
+`.githooks/pre-push` rejects pushes to `main`. It lives in the repo because
+untracked `.git/hooks/` files don't survive a clone. Don't reach for
+`--no-verify`.
+
+`make install` builds this tree into `~/.local/bin/zen-notes`. Run it after a
+change or you keep testing the old binary. To try it:
+
+```
 ZEN_NOTES_DIR=/tmp/zn zen-notes
 ```
 
 Point `ZEN_NOTES_DIR` at a scratch directory while you work. The app writes on
 a timer with no confirmation, and it is your real notes otherwise.
 
-## Layout
+## The checks
 
-```
-main.go                       flags, resolve the notes dir, run the program
-internal/note/store.go        day arithmetic, paths, load, atomic save
-internal/note/watch.go        fsnotify directory watch, emits a tea.Msg
-internal/editor/buffer.go     lines of runes, edits, clamping
-internal/editor/motion.go     word, find and paragraph motions
-internal/editor/vim.go        modes, operator-pending, key to action
-internal/editor/textobject.go iw aw i" a( ip
-internal/editor/visual.go     visual operators, block insert
-internal/editor/edits.go      case, replace, gv, %
-internal/editor/screen.go     H M L, zt zz zb, viewport
-internal/editor/wrap.go       logical lines to visual rows
-internal/editor/highlight.go  markdown tokens
-internal/editor/search.go     / n N, incremental
-internal/editor/render.go     styles, gutter, the rendered frame
-internal/app/app.go           tea.Model, autosave tick, reload decisions
-internal/app/view.go          status bar, cursor shape, binding list
-```
+`make all` is the gate. It should be clean before you open a pull request.
 
-`internal/editor` knows nothing about files or Bubble Tea messages. It takes
-keys and returns a rendered frame. `internal/note` knows nothing about the
-editor. `internal/app` is the only place the two meet, and it is the only
-package that talks to the terminal.
+| Command | Does |
+| --- | --- |
+| `make all` | lint, test, build |
+| `make lint` | gofmt, `go mod tidy`, `go vet`, golangci-lint |
+| `make test` | `go test -race` with coverage |
+| `make fmt-fix` | `gofmt -w .` |
+| `go test ./internal/editor -run TestName` | a single test |
+
+`make help` lists every target.
+
+Run checks directly, never through a pipe that swallows the exit code.
+`gofmt -l .` exits 0 even when it lists files, and `golangci-lint run | tail`
+reports success on failure.
+
+CI runs the same checks plus a cross-compile to five targets: darwin and linux
+on amd64 and arm64, and windows on amd64. golangci-lint is pinned in
+`.github/workflows/ci.yml` to the local brew version. Bump both together, or CI
+and local runs stop agreeing.
+
+## Boundaries
+
+Breaking one of these is a review-stopper.
+
+- **`internal/note` is storage.** Days, paths, atomic save and the directory
+  watch. It knows nothing about the editor.
+- **`internal/editor` is the vim editor and the renderer.** It takes keys and
+  returns a rendered frame, and knows nothing about files or Bubble Tea
+  messages.
+- **`internal/app` is the only place the two meet**, and the only package that
+  talks to the terminal.
+- **`internal/version`** holds the version release builds stamp in.
+
+Agent-facing invariants live in [`CLAUDE.md`](../CLAUDE.md).
 
 ## Design constraints worth knowing before you change something
 
@@ -95,9 +106,7 @@ Bare runes are literal. `<esc>`, `<cr>`, `<bs>`, `<c-d>` and friends are named.
 `<lt>` is a literal `<`, so `<` stays typable.
 
 When you are adding vim behavior, check it against real vim before you trust
-your expectation. Several of the tests here were wrong on the first pass, not
-the code: `d;`, `diw` on punctuation, `di(` from outside the parens, `%` on an
-unmatched brace.
+your expectation.
 
 Confirm a new test actually catches its regression. Break the code, watch it
 fail, put it back.
@@ -114,18 +123,21 @@ tmux send-keys -t zn 'ihello' Escape
 tmux capture-pane -pt zn
 ```
 
-Two things that have cost time here:
+Three traps:
 
 - `tmux send-keys` treats `;` as a command separator. Send it with
   `tmux send-keys -t zn -l '\;'` or it looks like a broken binding.
+- Escape followed immediately by another key is parsed as a meta sequence, so
+  `Escape` then `k` arrives as Alt+k and never leaves insert mode. Sleep
+  between them.
 - `capture-pane` normalizes some output. For escape sequences, use
   `tmux pipe-pane` and read the raw bytes.
 
 Manual checks worth running for anything touching save, watch or layout:
 
 - Two terminals on the same day. Type in one, the other updates within a
-  second. Then edit both at once and confirm the conflict behaves as the
-  README describes, with no crash and no garbled file.
+  second. Then edit both at once and confirm the conflict behaves as
+  [the guide](guide.md) describes, with no crash and no garbled file.
 - A long line at a narrow width, to confirm wrapping and the cursor still
   agree.
 - Light theme and dark theme, and a theme switch while the app is running.
@@ -142,7 +154,7 @@ at merge time and again before a release:
 | `internal/app/**` | [`keys.md`](keys.md), [`guide.md`](guide.md) |
 | `internal/note/**` | [`guide.md`](guide.md) |
 | `main.go`, `install.sh`, `.github/workflows/**` | [`install.md`](install.md), [`README.md`](../README.md) |
-| the test conventions, the layout | this file |
+| the test conventions, the boundaries | this file |
 
 `git diff --name-only <ref>..HEAD` gives the left column, so the set of documents
 to check is derived rather than remembered.
@@ -174,8 +186,10 @@ commit.
 - Say what you verified and what it showed, not that you tested it.
 - Commit subjects are imperative and plain: `Add screen motions, scroll
   positioning, and the vim staples`.
-- Comments explain intent, trade-offs and constraints. Keep them to two lines,
-  four for a doc comment. If a comment needs more, the code is the problem.
+- No comments inside a function body. Outside one, only three kinds: a
+  one-line file purpose when the name doesn't say it, a doc comment on an
+  exported name, and a one-line why on a declaration when the code can't show
+  it. If code needs more, fix the naming or the structure.
 - No `TODO` or `FIXME`. Out-of-scope follow-ups belong in an issue.
 
 ## Scope
@@ -198,9 +212,6 @@ Not wanted, and these have been considered:
 - A note list, a picker, or a sidebar. `[` and `]` walk the days.
 - Anything that reaches the network. Sync is your sync service's job, which is
   why the storage directory is a variable.
-
-Deferred rather than rejected, and worth an issue first: search across days,
-and rolling unchecked boxes forward to the next day.
 
 Open an issue before a large change. A pull request that gets rejected on
 scope is a waste of your evening.
