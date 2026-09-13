@@ -21,6 +21,8 @@ const statusTicks = 7
 
 const flashDuration = 110 * time.Millisecond
 
+const cellSizeWinOp = 16 // XTWINOPS 16 reports the cell size in pixels, which a font change moves
+
 type fileChangedMsg string
 
 type yankFlashDoneMsg struct{}
@@ -94,7 +96,7 @@ func NewModel(s *note.Store, w *note.Watcher) (*Model, error) {
 
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tick(), waitForChange(m.watch), tea.RequestBackgroundColor,
-		tea.Raw(ansi.WindowOp(16)))
+		tea.Raw(ansi.WindowOp(cellSizeWinOp)))
 }
 
 func tick() tea.Cmd {
@@ -151,7 +153,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.ed.SetHeight(m.textHeight())
-		return m, tea.Raw(ansi.WindowOp(16))
+		return m, tea.Raw(ansi.WindowOp(cellSizeWinOp))
 
 	case tickMsg:
 		m.expireStatus()
