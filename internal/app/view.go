@@ -10,7 +10,6 @@ import (
 	"github.com/praxis-labs-io/zen-notes/internal/editor"
 )
 
-// chromeRows is the status line, the only row the note does not get.
 const chromeRows = 1
 
 var (
@@ -22,8 +21,6 @@ var (
 	helpDimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
-// modeStyles colors the indicator per mode, so the mode is readable at a
-// glance without reading the word.
 var modeStyles = map[editor.Mode]lipgloss.Style{
 	editor.ModeNormal:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("4")),
 	editor.ModeInsert:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2")),
@@ -55,7 +52,6 @@ func (m *Model) View() tea.View {
 	return v
 }
 
-// statusBar puts the mode bottom left and the note's filename hard right.
 func (m *Model) statusBar(width int) string {
 	if cmd := m.ed.CommandLine(); cmd != "" {
 		return cmd
@@ -81,8 +77,6 @@ func (m *Model) statusBar(width int) string {
 	return l + strings.Repeat(" ", gap) + r
 }
 
-// cursor places the real terminal cursor. Color stays nil so the terminal's
-// own applies, and mode picks the pair: blinking bar to type in, steady block.
 func (m *Model) cursor(r editor.Rendered) *tea.Cursor {
 	if cmd := m.ed.CommandLine(); cmd != "" {
 		c := tea.NewCursor(ansi.StringWidth(cmd), m.textHeight())
@@ -104,8 +98,6 @@ type helpGroup struct {
 	keys  [][2]string
 }
 
-// helpColumns is the binding list, split into the two columns it renders as.
-// Labels stay terse so both columns fit a narrow window without clipping.
 var helpColumns = [2][]helpGroup{
 	{
 		{"Modes", [][2]string{
@@ -157,15 +149,12 @@ var helpColumns = [2][]helpGroup{
 	},
 }
 
-// helpLines lays the bindings out in two columns, falling back to one when
-// the window is too narrow to split.
 func helpLines(width, height int) []string {
 	if width < 60 {
 		return fit(renderHelpColumn(slices.Concat(helpColumns[0], helpColumns[1]), width-2), height)
 	}
 
 	colWidth := width / 2
-	// Two columns of space between them, so the columns can never touch.
 	leftRoom := colWidth - 4
 	left := renderHelpColumn(helpColumns[0], leftRoom)
 	right := renderHelpColumn(helpColumns[1], width-colWidth-2)
@@ -180,8 +169,6 @@ func helpLines(width, height int) []string {
 	return fit(out, height)
 }
 
-// renderHelpColumn turns one column's groups into styled lines, sizing the
-// key column to its longest key so every description starts in one place.
 func renderHelpColumn(groups []helpGroup, width int) []string {
 	keyWidth := 0
 	for _, g := range groups {
@@ -210,7 +197,6 @@ func at(rows []string, i int) string {
 	return ""
 }
 
-// fit pads or clips a block to exactly height rows.
 func fit(rows []string, height int) []string {
 	for len(rows) < height {
 		rows = append(rows, "")

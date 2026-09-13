@@ -5,8 +5,6 @@ import (
 	"unicode"
 )
 
-// caseOp maps the key after g onto the operator that runs it, reporting
-// false for keys that are not one of gU, gu or g~.
 func caseOp(r rune) (rune, bool) {
 	switch r {
 	case 'U':
@@ -19,8 +17,7 @@ func caseOp(r rune) (rune, bool) {
 	return 0, false
 }
 
-// Operators that transform text in place rather than removing it. They live
-// outside the ASCII letters so they cannot collide with a real key.
+// Negative so they never collide with a key rune.
 const (
 	opUpper  = -1
 	opLower  = -2
@@ -29,7 +26,6 @@ const (
 	opDedent = -5
 )
 
-// isCaseOp reports whether an operator rewrites runes rather than cutting them.
 func isCaseOp(op rune) bool {
 	return op == opUpper || op == opLower || op == opToggle
 }
@@ -45,8 +41,7 @@ func caseFunc(op rune) func(rune) rune {
 	}
 }
 
-// replaceRunes is r: overwrite count runes under the cursor, staying put.
-// It does nothing if the line is too short, as vim does.
+// Does nothing when fewer than count runes remain, as in vim.
 func (e *Editor) replaceRunes(with rune, count int) {
 	if with == 0 {
 		return
@@ -66,7 +61,6 @@ func (e *Editor) replaceRunes(with rune, count int) {
 	e.clampCursor()
 }
 
-// toggleAt is ~ in normal mode: flip the case under the cursor and step right.
 func (e *Editor) toggleAt(count int) {
 	line := e.buf.runes(e.cursor.Line)
 	if e.cursor.Col >= len(line) {
@@ -84,7 +78,6 @@ func (e *Editor) toggleAt(count int) {
 	e.clampCursor()
 }
 
-// reselect is gv: put the last visual selection back up.
 func (e *Editor) reselect() {
 	if e.lastVisual == [2]Pos{} {
 		return
@@ -95,15 +88,12 @@ func (e *Editor) reselect() {
 	e.clampCursor()
 }
 
-// rememberVisual records the selection so gv can bring it back.
 func (e *Editor) rememberVisual() {
 	if e.mode.Visual() {
 		e.lastVisual = [2]Pos{e.visualStart, e.cursor}
 	}
 }
 
-// matchBracket is %: the partner of the bracket under the cursor, or of the
-// first bracket to its right on the same line.
 func matchBracket(b *Buffer, cur Pos) (Pos, bool) {
 	line := b.runes(cur.Line)
 	for col := cur.Col; col < len(line); col++ {
@@ -125,7 +115,6 @@ const (
 	closeBrackets = ")]}"
 )
 
-// bracketPair reports the delimiters r belongs to and which way to scan.
 func bracketPair(r rune) (open, close rune, forward, ok bool) {
 	if i := strings.IndexRune(openBrackets, r); i >= 0 {
 		return r, rune(closeBrackets[i]), true, true

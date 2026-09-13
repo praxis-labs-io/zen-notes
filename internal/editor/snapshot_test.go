@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// snapshotText joins a snapshot the way Buffer.Text would, so a test can say
-// what the undo stack still holds.
 func snapshotText(lines [][]rune) string {
 	parts := make([]string, len(lines))
 	for i, l := range lines {
@@ -15,9 +13,6 @@ func snapshotText(lines [][]rune) string {
 	return strings.Join(parts, "\n")
 }
 
-// Lines shares the line slices rather than copying them, which is only safe
-// because every mutator replaces a line header instead of writing through it.
-// One that writes in place would corrupt the undo stack, so each gets a case.
 func TestSnapshotSurvivesBufferMutation(t *testing.T) {
 	const text = "one two\nthree four\nfive six"
 
@@ -50,15 +45,13 @@ func TestSnapshotSurvivesBufferMutation(t *testing.T) {
 	}
 }
 
-// The same contract from the other side: every editor command that rewrites
-// runes has to leave the snapshot it just took alone.
 func TestSnapshotSurvivesEditorCommand(t *testing.T) {
 	const text = "one two\nthree four\nfive six"
 
 	tests := []struct {
 		name string
 		keys string
-		text string // defaults to the text above
+		text string
 	}{
 		{name: "replace under cursor", keys: "rz"},
 		{name: "replace several", keys: "3rz"},
@@ -105,8 +98,6 @@ func TestSnapshotSurvivesEditorCommand(t *testing.T) {
 	}
 }
 
-// SetLines clones so a restored buffer never shares its array with a snapshot
-// still on a stack. Undo, edit, redo, undo exercises both stacks in turn.
 func TestUndoRedoRoundTripKeepsItsHistory(t *testing.T) {
 	e := New("one\ntwo\nthree")
 

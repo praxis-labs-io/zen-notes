@@ -1,5 +1,4 @@
-// Package editor holds the modal text buffer behind zen-notes: line storage,
-// vim motions and operators, markdown highlighting, and the view.
+// Package editor is the vim-style modal editor and renderer behind zen-notes.
 package editor
 
 import (
@@ -7,13 +6,12 @@ import (
 	"strings"
 )
 
-// Pos addresses a rune in the buffer. Col counts runes, never bytes.
+// Pos.Col counts runes, not bytes or cells.
 type Pos struct {
 	Line int
 	Col  int
 }
 
-// Before reports whether p sorts earlier in the buffer than o.
 func (p Pos) Before(o Pos) bool {
 	if p.Line != o.Line {
 		return p.Line < o.Line
@@ -21,8 +19,7 @@ func (p Pos) Before(o Pos) bool {
 	return p.Col < o.Col
 }
 
-// Buffer is the note as logical lines, no terminators stored. NewBuffer and
-// Text round trip exactly, so a trailing newline shows as a final empty line.
+// Buffer holds a note as lines without terminators, so a trailing newline is a final empty line.
 type Buffer struct {
 	lines [][]rune
 }
@@ -37,7 +34,6 @@ func NewBuffer(text string) *Buffer {
 	return &Buffer{lines: lines}
 }
 
-// Text joins the lines back into the file contents.
 func (b *Buffer) Text() string {
 	parts := make([]string, len(b.lines))
 	for i, l := range b.lines {
@@ -46,10 +42,10 @@ func (b *Buffer) Text() string {
 	return strings.Join(parts, "\n")
 }
 
-// LineCount is the number of logical lines, always at least one.
+// LineCount returns the number of lines, always at least one.
 func (b *Buffer) LineCount() int { return len(b.lines) }
 
-// Line returns the logical line at i, or empty if i is out of range.
+// Line returns line i, or "" when i is out of range.
 func (b *Buffer) Line(i int) string {
 	if i < 0 || i >= len(b.lines) {
 		return ""
@@ -57,7 +53,7 @@ func (b *Buffer) Line(i int) string {
 	return string(b.lines[i])
 }
 
-// LineLen is the rune count of line i.
+// LineLen returns the rune count of line i, or 0 when i is out of range.
 func (b *Buffer) LineLen(i int) int {
 	if i < 0 || i >= len(b.lines) {
 		return 0
@@ -65,7 +61,7 @@ func (b *Buffer) LineLen(i int) int {
 	return len(b.lines[i])
 }
 
-// runes gives internal read access without a conversion. Do not mutate.
+// Returns the stored line uncopied to skip a conversion; callers must not mutate it.
 func (b *Buffer) runes(i int) []rune {
 	if i < 0 || i >= len(b.lines) {
 		return nil
@@ -73,16 +69,12 @@ func (b *Buffer) runes(i int) []rune {
 	return b.lines[i]
 }
 
-// Lines snapshots the buffer for the undo stack. The lines themselves are
-// shared, not copied: every mutator here replaces a line header rather than
-// writing through it, so a snapshot never sees a later edit.
+// Lines returns an undo snapshot that shares line slices with the buffer.
 func (b *Buffer) Lines() [][]rune {
 	return slices.Clone(b.lines)
 }
 
-// SetLines restores a snapshot taken with Lines. It clones the outer slice so
-// the restored buffer owns its array outright: Insert and Delete assign a new
-// header in place, and a caller that still holds the snapshot must not see it.
+// SetLines restores a snapshot from Lines without aliasing it. An empty snapshot yields one empty line.
 func (b *Buffer) SetLines(lines [][]rune) {
 	if len(lines) == 0 {
 		b.lines = [][]rune{{}}
@@ -91,7 +83,7 @@ func (b *Buffer) SetLines(lines [][]rune) {
 	b.lines = slices.Clone(lines)
 }
 
-// Clamp moves p to the nearest valid position in the buffer.
+// Clamp returns p moved to the nearest valid position. Col may equal the line length.
 func (b *Buffer) Clamp(p Pos) Pos {
 	if p.Line < 0 {
 		p.Line = 0
@@ -108,14 +100,13 @@ func (b *Buffer) Clamp(p Pos) Pos {
 	return p
 }
 
-// End is the position just past the last rune of the buffer.
+// End returns the position just past the last rune.
 func (b *Buffer) End() Pos {
 	last := len(b.lines) - 1
 	return Pos{last, len(b.lines[last])}
 }
 
-// Insert writes text at p, splitting on any newlines, and returns the
-// position just past what was inserted.
+// Insert writes text at p, clamped, and returns the position just past the inserted text.
 func (b *Buffer) Insert(p Pos, text string) Pos {
 	p = b.Clamp(p)
 	if text == "" {
@@ -145,8 +136,7 @@ func (b *Buffer) Insert(p Pos, text string) Pos {
 	return end
 }
 
-// Delete removes the half-open rune range and returns what it took. The
-// positions may be given in either order.
+// Delete removes the half-open range between from and to, given in either order, and returns the removed text.
 func (b *Buffer) Delete(from, to Pos) string {
 	from, to = b.Clamp(from), b.Clamp(to)
 	if to.Before(from) {
@@ -177,7 +167,7 @@ func (b *Buffer) Delete(from, to Pos) string {
 	return sb.String()
 }
 
-// ReplaceLines swaps the half-open line range [from, to) for with.
+// ReplaceLines replaces lines [from, to) with with. The buffer never ends up empty.
 func (b *Buffer) ReplaceLines(from, to int, with []string) {
 	if from < 0 {
 		from = 0
@@ -195,7 +185,6 @@ func (b *Buffer) ReplaceLines(from, to int, with []string) {
 	b.splice(from, to, replacement)
 }
 
-// splice replaces lines [from, to), keeping the buffer from ever emptying.
 func (b *Buffer) splice(from, to int, with [][]rune) {
 	next := make([][]rune, 0, len(b.lines)-(to-from)+len(with))
 	next = append(next, b.lines[:from]...)

@@ -1,13 +1,10 @@
 package editor
 
-// textRange is the span a text object resolves to, as an inclusive pair.
 type textRange struct {
 	from, to Pos
 	linewise bool
 }
 
-// pairs maps the bracket and quote objects to their delimiters. Quotes use the
-// same rune on both sides, which is what makes them a separate scan below.
 var pairs = map[rune][2]rune{
 	'(': {'(', ')'}, ')': {'(', ')'}, 'b': {'(', ')'},
 	'[': {'[', ']'}, ']': {'[', ']'},
@@ -17,8 +14,6 @@ var pairs = map[rune][2]rune{
 
 var quotes = map[rune]bool{'"': true, '\'': true, '`': true}
 
-// resolveTextObject finds the span for iw, aw, i", a(, ip and friends,
-// reporting false for an object it does not know.
 func resolveTextObject(b *Buffer, cur Pos, around bool, object rune) (textRange, bool) {
 	switch {
 	case object == 'w' || object == 'W':
@@ -34,8 +29,6 @@ func resolveTextObject(b *Buffer, cur Pos, around bool, object rune) (textRange,
 	return textRange{}, false
 }
 
-// wordObject is iw and aw. Around takes the trailing run of blanks, or the
-// leading one when the word ends the line.
 func wordObject(b *Buffer, cur Pos, around, big bool) (textRange, bool) {
 	line := b.runes(cur.Line)
 	if len(line) == 0 {
@@ -69,7 +62,6 @@ func wordObject(b *Buffer, cur Pos, around, big bool) (textRange, bool) {
 	return textRange{from: Pos{cur.Line, start}, to: Pos{cur.Line, end}}, true
 }
 
-// classOfIn folds punctuation into words for the WORD objects.
 func classOfIn(line []rune, i int, big bool) charClass {
 	c := classOf(line[i])
 	if big && c == classPunct {
@@ -78,8 +70,6 @@ func classOfIn(line []rune, i int, big bool) charClass {
 	return c
 }
 
-// paragraphObject is ip and ap: the run of non-blank lines around the cursor,
-// plus the blank lines after it for ap.
 func paragraphObject(b *Buffer, cur Pos, around bool) (textRange, bool) {
 	blank := isEmptyLine(b, cur.Line)
 	start, end := cur.Line, cur.Line
@@ -97,8 +87,6 @@ func paragraphObject(b *Buffer, cur Pos, around bool) (textRange, bool) {
 	return textRange{from: Pos{start, 0}, to: Pos{end, 0}, linewise: true}, true
 }
 
-// quoteObject is i" and a", scanning the line's quotes in pairs so the cursor
-// can sit anywhere inside or on either delimiter.
 func quoteObject(b *Buffer, cur Pos, around bool, q rune) (textRange, bool) {
 	line := b.runes(cur.Line)
 	var open = -1
@@ -125,8 +113,6 @@ func quoteRange(line, open, close int, around bool) textRange {
 	return textRange{from: Pos{line, open + 1}, to: Pos{line, close - 1}}
 }
 
-// pairObject is i( and a(, matching nesting outward from the cursor. It scans
-// the whole buffer so a block spanning lines still resolves.
 func pairObject(b *Buffer, cur Pos, around bool, open, close rune) (textRange, bool) {
 	start, ok := scanBack(b, cur, open, close)
 	if !ok {
@@ -150,7 +136,6 @@ func pairObject(b *Buffer, cur Pos, around bool, open, close rune) (textRange, b
 	return textRange{from: inner, to: last}, true
 }
 
-// scanBack walks left for the unmatched opening delimiter.
 func scanBack(b *Buffer, cur Pos, open, close rune) (Pos, bool) {
 	if runeAt(b, cur) == open {
 		return cur, true
@@ -175,7 +160,6 @@ func scanBack(b *Buffer, cur Pos, open, close rune) (Pos, bool) {
 	}
 }
 
-// scanForward walks right for the matching closing delimiter.
 func scanForward(b *Buffer, cur Pos, open, close rune) (Pos, bool) {
 	if runeAt(b, cur) == close {
 		return cur, true

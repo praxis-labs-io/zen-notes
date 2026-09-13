@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// feed parses vim-style key notation so tests read like what you would type.
-// Bare runes are literal; <esc>, <cr>, <bs>, <c-d> and friends are named.
 func feed(t *testing.T, e *Editor, keys string) {
 	t.Helper()
 	for len(keys) > 0 {
@@ -15,7 +13,6 @@ func feed(t *testing.T, e *Editor, keys string) {
 			if end < 0 {
 				t.Fatalf("unterminated key name in %q", keys)
 			}
-			// <lt> is a literal '<', as in vim, so '<' stays typable.
 			if keys[1:end] == "lt" {
 				e.Feed(Rune('<'))
 			} else {
@@ -1037,7 +1034,6 @@ func TestCopyKeyDoesNothingWithoutAVisualSelection(t *testing.T) {
 	}
 }
 
-// Yanking changes nothing on screen, so it says what it took.
 func TestYankReportsWhatItTook(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1389,7 +1385,6 @@ func TestEscapeClearsAPendingOperator(t *testing.T) {
 }
 
 func TestScreenPositionMotions(t *testing.T) {
-	// 40 lines in a 10 row window, scrolled so lines 10..19 are showing.
 	newScrolled := func(t *testing.T) *Editor {
 		t.Helper()
 		e := New(strings.TrimSuffix(strings.Repeat("x\n", 40), "\n"))
@@ -1642,8 +1637,6 @@ func TestSetTextClearsDirty(t *testing.T) {
 	}
 }
 
-// Arrows stand in for hjkl everywhere, so counts, operators and visual mode
-// all work with them.
 func TestArrowsTakeCountsAndOperators(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1685,8 +1678,6 @@ func TestArrowRemembersTheColumnLikeJK(t *testing.T) {
 	}
 }
 
-// An arrow is a motion, never an argument, so it cancels a half-typed find
-// instead of being swallowed as the character to search for.
 func TestArrowCancelsAPendingFind(t *testing.T) {
 	e := run(t, "hello", "f<down>")
 	if e.Cursor() != (Pos{0, 0}) {
@@ -1696,7 +1687,6 @@ func TestArrowCancelsAPendingFind(t *testing.T) {
 		t.Fatalf("PendingKeys = %q, want the find abandoned", e.PendingKeys())
 	}
 
-	// Normal mode carries on, rather than still waiting for a target.
 	feed(t, e, "x")
 	if e.Text() != "ello" {
 		t.Fatalf("Text = %q, want ello", e.Text())

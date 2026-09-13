@@ -9,8 +9,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Watcher reports note files changing on disk. It watches the directory
-// rather than a file, because an atomic save replaces the file's inode.
+// Watcher reports dated notes changing on disk.
 type Watcher struct {
 	fs      *fsnotify.Watcher
 	changes chan string
@@ -18,7 +17,7 @@ type Watcher struct {
 	once    sync.Once
 }
 
-// Watch starts reporting changes to the .md notes in dir.
+// Watch starts reporting changes to the dated .md notes in dir.
 func Watch(dir string) (*Watcher, error) {
 	fs, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -38,8 +37,7 @@ func Watch(dir string) (*Watcher, error) {
 	return w, nil
 }
 
-// Changes delivers the base name of each note that changed. It closes when
-// the watcher does.
+// Changes delivers the base name of each note that changed, and closes when the watcher does.
 func (w *Watcher) Changes() <-chan string { return w.changes }
 
 // Close stops watching. It is safe to call more than once.
@@ -70,8 +68,7 @@ func (w *Watcher) loop() {
 	}
 }
 
-// send never blocks, so a busy consumer cannot stall the watcher. Dropping a
-// duplicate is harmless because the app re-reads the whole file.
+// Drops rather than blocks when full; a duplicate is harmless because the app re-reads the whole file.
 func (w *Watcher) send(name string) {
 	select {
 	case w.changes <- name:
@@ -80,7 +77,6 @@ func (w *Watcher) send(name string) {
 	}
 }
 
-// isNoteWrite reports whether an event means a dated note gained new content.
 func isNoteWrite(e fsnotify.Event) bool {
 	if !e.Has(fsnotify.Write) && !e.Has(fsnotify.Create) && !e.Has(fsnotify.Rename) {
 		return false

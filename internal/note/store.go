@@ -41,12 +41,10 @@ func (d Day) String() string {
 	return d.time().Format(dayLayout)
 }
 
-// Add returns the date n days later, or earlier when n is negative.
 func (d Day) Add(n int) Day {
 	return dayOf(d.time().AddDate(0, 0, n))
 }
 
-// Before reports whether d falls earlier in the calendar than o.
 func (d Day) Before(o Day) bool {
 	return d.time().Before(o.time())
 }
@@ -55,7 +53,7 @@ func (d Day) time() time.Time {
 	return time.Date(d.Year, d.Month, d.Date, 0, 0, 0, 0, time.Local)
 }
 
-// DefaultDir is $ZEN_NOTES_DIR when set, else ~/.zen-notes.
+// DefaultDir returns $ZEN_NOTES_DIR when set, else ~/.zen-notes.
 func DefaultDir() (string, error) {
 	if dir := os.Getenv("ZEN_NOTES_DIR"); dir != "" {
 		return dir, nil
@@ -67,12 +65,11 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, ".zen-notes"), nil
 }
 
-// Store reads and writes the day notes under a single directory.
 type Store struct {
 	dir string
 }
 
-// New creates the directory if it does not exist.
+// New opens a store in dir, creating the directory if it does not exist.
 func New(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create notes directory: %w", err)
@@ -80,10 +77,9 @@ func New(dir string) (*Store, error) {
 	return &Store{dir: dir}, nil
 }
 
-// Dir is the directory holding the notes.
 func (s *Store) Dir() string { return s.dir }
 
-// Path is where the given day's note lives, whether or not it exists yet.
+// Path is where the day's note lives, whether or not it exists yet.
 func (s *Store) Path(d Day) string {
 	return filepath.Join(s.dir, d.String()+".md")
 }
@@ -100,15 +96,13 @@ func (s *Store) Load(d Day) (string, error) {
 	return string(b), nil
 }
 
-// Save replaces the day's note. It writes a temp file and renames it over the
-// target so a concurrent reader never sees a partial note.
+// Save replaces the day's note atomically.
 func (s *Store) Save(d Day, content string) error {
 	f, err := os.CreateTemp(s.dir, ".zen-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp note: %w", err)
 	}
 	tmp := f.Name()
-	// Gone already once the rename lands, so a failure here says nothing.
 	defer func() { _ = os.Remove(tmp) }()
 
 	if _, err := f.WriteString(content); err != nil {
@@ -128,8 +122,7 @@ func (s *Store) Save(d Day, content string) error {
 	return nil
 }
 
-// Days lists the dates that have a saved note, oldest first. os.ReadDir
-// sorts by filename, and YYYY-MM-DD sorts chronologically.
+// Days lists the dates that have a saved note, oldest first.
 func (s *Store) Days() ([]Day, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
@@ -151,7 +144,7 @@ func (s *Store) Days() ([]Day, error) {
 	return days, nil
 }
 
-// Prev is the newest saved day older than d, if there is one.
+// Prev returns the newest saved day before d, reporting false when there is none.
 func (s *Store) Prev(d Day) (Day, bool, error) {
 	days, err := s.Days()
 	if err != nil {
@@ -165,7 +158,7 @@ func (s *Store) Prev(d Day) (Day, bool, error) {
 	return Day{}, false, nil
 }
 
-// Next is the oldest saved day newer than d, if there is one.
+// Next returns the oldest saved day after d, reporting false when there is none.
 func (s *Store) Next(d Day) (Day, bool, error) {
 	days, err := s.Days()
 	if err != nil {

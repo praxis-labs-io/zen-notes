@@ -21,7 +21,6 @@ type listLine struct {
 	bareTask     bool
 }
 
-// enterEdit describes the context-aware edit for Enter in insert mode.
 func enterEdit(line []rune, col int, afterList bool) insertEdit {
 	item, isList := parseListLine(line)
 	if isList && col >= item.contentStart {
@@ -39,7 +38,6 @@ func enterEdit(line []rune, col int, afterList bool) insertEdit {
 	return insertEdit{insert: "\n"}
 }
 
-// backspaceEdit removes an empty list marker at its content boundary.
 func backspaceEdit(line []rune, col int, afterList bool) (insertEdit, bool) {
 	item, isList := parseListLine(line)
 	if !isList || col != item.contentStart || !onlySpace(line[item.contentStart:]) {
@@ -59,8 +57,6 @@ func exitListEdit(contentStart int, afterList bool) insertEdit {
 	return edit
 }
 
-// needsListSeparator reports whether a newly typed marker begins a list
-// immediately after non-list prose.
 func needsListSeparator(line, previous []rune) bool {
 	item, isList := parseListLine(line)
 	if !isList || !onlySpace(line[item.contentStart:]) || onlySpace(previous) {
@@ -179,8 +175,6 @@ func onlySpace(runes []rune) bool {
 	return strings.TrimSpace(string(runes)) == ""
 }
 
-// shiftListItem moves the current list item and its descendants by one level.
-// It reports whether the line was a list item, even when the shift is invalid.
 func (e *Editor) shiftListItem(dir int) bool {
 	item, ok := parseListLine(e.buf.runes(e.cursor.Line))
 	if !ok {
@@ -224,8 +218,6 @@ func (e *Editor) shiftListItem(dir int) bool {
 	return true
 }
 
-// hasPreviousListSibling rejects indentation without an item to become the
-// parent. Descendants of a previous sibling are skipped while walking back.
 func (e *Editor) hasPreviousListSibling(indent int) bool {
 	for line := e.cursor.Line - 1; line >= 0; line-- {
 		item, ok := parseListLine(e.buf.runes(line))

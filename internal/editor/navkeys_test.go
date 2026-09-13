@@ -2,8 +2,6 @@ package editor
 
 import "testing"
 
-// Home and End resolve to motions, so counts, operators and visual mode come
-// with them rather than needing their own cases.
 func TestNavigationKeysInNormalMode(t *testing.T) {
 	const text = "one two three\nfour five\nsix"
 
@@ -39,8 +37,6 @@ func TestNavigationKeysInNormalMode(t *testing.T) {
 	}
 }
 
-// A named key is never a count digit, so Home after a stray 2 is still Home
-// and does not leave a 20 behind for the next key.
 func TestHomeIsNotACountDigit(t *testing.T) {
 	e := run(t, "one two three\nfour\nfive\nsix\nseven", "$2<home>j")
 	if e.Cursor() != (Pos{1, 0}) {
@@ -85,8 +81,6 @@ func TestForwardDeleteAtTheEndOfTheBufferDoesNothing(t *testing.T) {
 	}
 }
 
-// PageUp and PageDown keep two lines on screen across the jump, as vim's C-f
-// and C-b do, so the reader has something to land on.
 func TestPageKeysOverlapByTwoLines(t *testing.T) {
 	lines := make([]byte, 0, 200)
 	for i := range 100 {

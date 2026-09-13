@@ -4,9 +4,6 @@ import "github.com/mattn/go-runewidth"
 
 const tabWidth = 8
 
-// rowStarts gives the rune index each wrapped row of a line begins at, always
-// starting with 0. It breaks after a space where it can, mid-word where it
-// must, and reserves indent cells on continuation rows.
 func rowStarts(runes []rune, width, indent int) []int {
 	starts := []int{0}
 	if width <= 0 || len(runes) == 0 {
@@ -54,7 +51,6 @@ func rowStarts(runes []rune, width, indent int) []int {
 	return starts
 }
 
-// continuationIndent is the display column where wrapped content resumes.
 func continuationIndent(runes []rune, width int) int {
 	contentStart := leadingSpaceEnd(runes)
 	for contentStart < len(runes) {
@@ -87,7 +83,6 @@ func runeWidthAt(r rune, col int) int {
 	return runewidth.RuneWidth(r)
 }
 
-// renderedRowWidth measures the cells renderRow can draw from one visual row.
 func renderedRowWidth(runes []rune, start, end, indent, width int) int {
 	col := indent
 	for i := start; i < end && i < len(runes); i++ {
@@ -132,8 +127,6 @@ func quoteContentStart(runes []rune, at int) (int, bool) {
 	return at, true
 }
 
-// cursorRowCol maps a rune index in a line to its wrapped row and the display
-// column within that row.
 func cursorRowCol(runes []rune, starts []int, col, indent int) (int, int) {
 	row := 0
 	for i, s := range starts {
@@ -152,7 +145,6 @@ func cursorRowCol(runes []rune, starts []int, col, indent int) (int, int) {
 	return row, width - base
 }
 
-// screenColumnToRune maps a display column on a visual row to a real rune.
 func screenColumnToRune(runes []rune, row vrow, desired, width int) int {
 	if len(runes) == 0 {
 		return 0
@@ -182,8 +174,6 @@ func screenColumnToRune(runes []rune, row vrow, desired, width int) int {
 	return min(row.start, len(runes)-1)
 }
 
-// scrollTo returns the top row that keeps the cursor row inside a window of
-// the given height.
 func scrollTo(top, cursorRow, height int) int {
 	if height <= 0 {
 		return 0

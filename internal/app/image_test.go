@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/x/ansi/kitty"
 )
 
-// writeImage puts a natW x natH image on disk and returns its path.
 func writeImage(t *testing.T, dir, name string, natW, natH int) string {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, natW, natH))
@@ -78,7 +77,6 @@ func TestResolveImagePath(t *testing.T) {
 	}
 }
 
-// A single-letter Windows drive is a path, not a scheme.
 func TestResolveImagePathKeepsWindowsDriveLetters(t *testing.T) {
 	got, err := resolveImagePath(`C:/pics/pic.png`, "/notes")
 	if err != nil {
@@ -99,15 +97,10 @@ func TestFitImage(t *testing.T) {
 		maxCols, maxRows int
 		cols, rows       int
 	}{
-		// 100x200px is 10x10 cells, and fits as it is.
 		{"fits as is", 100, 200, 40, 20, 10, 10},
-		// Twice too wide: halved, and the height halves with it.
 		{"width bound", 200, 200, 10, 20, 10, 5},
-		// Twice too tall: halved, and the width halves with it.
 		{"height bound", 200, 400, 20, 10, 10, 10},
-		// Never enlarged past its natural size.
 		{"small image", 10, 20, 40, 20, 1, 1},
-		// A partial cell still takes a whole cell.
 		{"rounds up", 105, 205, 40, 20, 11, 11},
 	}
 	for _, tt := range tests {
@@ -161,14 +154,12 @@ func TestTransmitImageSendsAPNGByPath(t *testing.T) {
 	if !strings.HasPrefix(seq, "\x1b_G") || !strings.HasSuffix(seq, "\x1b\\") {
 		t.Fatalf("transmitImage = %q, want one graphics sequence", seq)
 	}
-	// t=f is the file transmission, so the pixels never cross the tty.
 	if !strings.Contains(seq, "t=f") || !strings.Contains(seq, "i=3") {
 		t.Fatalf("transmitImage = %q, want a file transmission for id 3", seq)
 	}
 	if !strings.Contains(seq, "U=1") {
 		t.Fatalf("transmitImage = %q, want a virtual placement", seq)
 	}
-	// The payload is base64, which x/ansi does not do for us.
 	if strings.Contains(seq, path) {
 		t.Fatalf("transmitImage sent the path unencoded: %q", seq)
 	}
@@ -182,7 +173,6 @@ func TestTransmitImageReencodesOtherFormats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("transmitImage: %v", err)
 	}
-	// Direct transmission, because the protocol only compresses PNG.
 	if strings.Contains(seq, "t=f") {
 		t.Fatalf("transmitImage sent a JPEG by path: %q", seq)
 	}
@@ -213,7 +203,6 @@ func TestImagesResolveTransmitsOnceUntilSomethingChanges(t *testing.T) {
 		t.Fatal("resolve re-transmitted an unchanged image")
 	}
 
-	// A tighter fit is a different placement, so it has to be sent again.
 	second, seq, err := i.resolve("pic.png", dir, 4, 20)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
@@ -259,8 +248,6 @@ func TestDeleteImageTargetsOneID(t *testing.T) {
 	}
 }
 
-// countingFS records how often the header of an image is read, which is the
-// expensive half of a resolve.
 func TestResolveReadsTheHeaderOnlyWhenSomethingMoved(t *testing.T) {
 	dir := t.TempDir()
 	path := writeImage(t, dir, "pic.png", 100, 200)
@@ -271,12 +258,9 @@ func TestResolveReadsTheHeaderOnlyWhenSomethingMoved(t *testing.T) {
 		t.Fatalf("resolve: %v", err)
 	}
 
-	// Make the file unreadable as an image. A resolve that still re-reads the
-	// header would now fail; one that trusts the cache returns what it had.
 	if err := os.WriteFile(path, []byte("no longer a png"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// Restore the recorded stat so the entry still looks unchanged.
 	entry := i.entries["pic.png"]
 	stat, err := os.Stat(path)
 	if err != nil {
@@ -289,8 +273,6 @@ func TestResolveReadsTheHeaderOnlyWhenSomethingMoved(t *testing.T) {
 		t.Fatalf("resolve re-read the header of an unchanged image: %v", err)
 	}
 
-	// Different bounds mean a different fit, so the header has to be read,
-	// and now it cannot be.
 	if _, _, err := i.resolve("pic.png", dir, 4, 20); err == nil {
 		t.Fatal("resolve skipped the fit after the bounds changed")
 	}
@@ -314,8 +296,6 @@ func TestClaimIDNeverTakesAnIDInUse(t *testing.T) {
 		t.Fatalf("claimID produced %d distinct ids, want %d", len(live), maxImageID)
 	}
 
-	// Freeing one id makes exactly that id the one available again. A counter
-	// that only wraps would hand out whatever it landed on next.
 	freed := i.entries["pic7.png"].id
 	delete(i.entries, "pic7.png")
 	if got := i.claimID("fresh.png"); got != freed {
@@ -332,8 +312,6 @@ func TestClaimIDReusesATargetsOwnID(t *testing.T) {
 	}
 }
 
-// A target that resolved once and then stops must be released, or its entry,
-// its terminal-side image and its id are held for the rest of the session.
 func TestSyncImagesReleasesATargetThatStopsResolving(t *testing.T) {
 	m := newTestModel(t, "![](pic.png)")
 	path := writeImage(t, m.store.Dir(), "pic.png", 100, 200)
@@ -366,7 +344,6 @@ func TestSyncImagesDropsPlacementsWhenThereIsNoRoom(t *testing.T) {
 		t.Fatal("no image placed at a normal window size")
 	}
 
-	// textHeight floors at 1, so half of it is zero and nothing can be drawn.
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 2})
 	if got := m.ed.Render(80, 2); strings.Contains(got.Content, string(kitty.Placeholder)) {
 		t.Fatal("image rows survived a window with no room for them")
