@@ -14,7 +14,7 @@ Don't restate the global rules here.
 ## Errors
 
 - Wrap with `%w` and context: `fmt.Errorf("write temp note: %w", err)`.
-- An error you mean to drop is spelled `_ = f.Close()`, and the reason goes in a comment when it isn't obvious. Never a lint suppression: the violation is the signal to fix the code, not to annotate around it.
+- An error you mean to drop is spelled `_ = f.Close()`. Never a lint suppression: the violation is the signal to fix the code, not to annotate around it.
 
 ## Bubble Tea
 
