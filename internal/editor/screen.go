@@ -6,7 +6,6 @@ func (e *Editor) applyDisplayMotion(delta, count int) {
 	e.applyingDisplayMotion = false
 }
 
-// displayMotion resolves gj and gk against freshly computed visual rows.
 func (e *Editor) displayMotion(delta, count int) motion {
 	if e.layoutWidth <= 0 {
 		line := min(max(e.cursor.Line+delta*count, 0), e.buf.LineCount()-1)
@@ -42,16 +41,13 @@ func (e *Editor) displayMotion(delta, count int) motion {
 	return motion{target: pos, kind: charExclusive}
 }
 
-// Top is the first visual row on screen, as of the last Render.
+// Top returns the first visual row shown by the last Render.
 func (e *Editor) Top() int { return e.top }
 
-// visibleRows is how many wrapped rows the window shows, capped by the buffer.
 func (e *Editor) visibleRows() int {
 	return min(e.height, max(len(e.rows)-e.top, 1))
 }
 
-// lineAtRow maps a visual row back to the logical line it belongs to, so the
-// screen motions land on a line rather than a wrapped fragment.
 func (e *Editor) lineAtRow(row int) int {
 	if len(e.rows) == 0 {
 		return e.cursor.Line
@@ -60,8 +56,6 @@ func (e *Editor) lineAtRow(row int) int {
 	return e.rows[row].line
 }
 
-// screenMotion is H, M and L: the top, middle and bottom of what is showing.
-// A count offsets H down from the top and L up from the bottom, as in vim.
 func (e *Editor) screenMotion(r rune, count int) (motion, bool) {
 	visible := e.visibleRows()
 
@@ -79,8 +73,6 @@ func (e *Editor) screenMotion(r rune, count int) (motion, bool) {
 	return motion{target: Pos{e.lineAtRow(row), 0}, kind: linewise}, true
 }
 
-// scrollTop repositions the window around the cursor for zt, zz and zb,
-// leaving the cursor on its line.
 func (e *Editor) scrollTop(where rune) {
 	if e.layoutWidth > 0 {
 		_, e.cursorRow, _ = e.layout(e.layoutWidth)

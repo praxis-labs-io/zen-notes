@@ -8,23 +8,19 @@ import (
 	"github.com/charmbracelet/x/ansi/kitty"
 )
 
-// MaxImageCells is the largest placeholder grid the protocol can address: a
-// cell says where it sits with a diacritic, and there are only so many.
+// MaxImageCells caps an image's rows and columns: kitty placeholders address each with a fixed diacritic table.
 const MaxImageCells = 297
 
-// ImagePlacement is where an image has been given room, in cells. The app
-// resolves and measures the file; the editor only reserves the rows.
+// ImagePlacement is a kitty image id and the cells reserved for it.
 type ImagePlacement struct {
 	ID         int
 	Cols, Rows int
 }
 
-// SetImages records the placements the app resolved, keyed by the target as
-// it is written in the note.
+// SetImages sets the placements to draw, keyed by image target as written in the note.
 func (e *Editor) SetImages(images map[string]ImagePlacement) { e.images = images }
 
-// ImageTargets lists the image references in the buffer, in line order and
-// with duplicates left in, so the app can resolve each one.
+// ImageTargets returns the target of every image-only line, in line order with duplicates kept.
 func (e *Editor) ImageTargets() []string {
 	var targets []string
 	for i := range e.buf.LineCount() {
@@ -35,7 +31,6 @@ func (e *Editor) ImageTargets() []string {
 	return targets
 }
 
-// imagePlacement is the placement to draw under a line, if any.
 func (e *Editor) imagePlacement(line int) (ImagePlacement, bool) {
 	if len(e.images) == 0 {
 		return ImagePlacement{}, false
@@ -48,9 +43,7 @@ func (e *Editor) imagePlacement(line int) (ImagePlacement, bool) {
 	return placement, ok
 }
 
-// imageLineTarget returns the target of a line holding nothing but an image
-// reference. An image draws on rows of its own, so a reference sharing a line
-// with other text stays plain markdown.
+// Only a line holding nothing but the image draws it, since the image takes rows of its own.
 func imageLineTarget(runes []rune) (string, bool) {
 	from := leadingSpaceEnd(runes)
 	to := len(runes)
@@ -67,18 +60,13 @@ func imageLineTarget(runes []rune) (string, bool) {
 	return link.target, true
 }
 
-// imageRow is one row of an image's placeholder grid. A zero id means the
-// row is ordinary text.
 type imageRow struct {
 	id, row, cols int
 }
 
 func (r imageRow) ok() bool { return r.id != 0 }
 
-// render draws one row of Unicode placeholder cells. The terminal composites
-// the image over them, reading the image id from the foreground colour and
-// the cell's position from the two diacritics. Every cell says where it sits,
-// so a partial redraw stays correct.
+// Kitty reads the image id from the foreground colour and the cell's row and column from the two diacritics.
 func (r imageRow) render(width int) (string, int) {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color(strconv.Itoa(r.id)))
 	cols := min(r.cols, width, MaxImageCells)

@@ -45,8 +45,6 @@ func TestImageLineTarget(t *testing.T) {
 	}
 }
 
-// parseInlineLink starts past the bracket, so a caller that skips the check
-// would take "!x](pic.png)" for an image.
 func TestImageLineTargetRequiresABracket(t *testing.T) {
 	for _, line := range []string{"!x](pic.png)", "!(pic.png)", "!!](pic.png)"} {
 		if got, ok := imageLineTarget([]rune(line)); ok {
@@ -60,8 +58,6 @@ func TestImageGridStopsAtTheAddressableLimit(t *testing.T) {
 	e.SetImages(map[string]ImagePlacement{"p.png": {ID: 7, Cols: 400, Rows: 400}})
 	rows := strings.Split(e.Render(GutterWidth(1)+500, 400).Content, "\n")
 
-	// A cell past the diacritic table would repeat the first column's mark,
-	// and kitty would draw that column again instead of the rest of the image.
 	if got := placeholderCount(rows[1]); got != MaxImageCells {
 		t.Fatalf("image row has %d placeholder cells, want %d", got, MaxImageCells)
 	}
@@ -82,9 +78,6 @@ func TestImageRowsTakeNoCursorLineWash(t *testing.T) {
 	e.SetImages(map[string]ImagePlacement{"pic.png": {ID: 7, Cols: 4, Rows: 2}})
 	rows := strings.Split(e.Render(GutterWidth(2)+20, 12).Content, "\n")
 
-	// The caret is on the image's line, so its own row is washed. The image
-	// rows must not be, or the wash frames the picture in the gutter and the
-	// trail while leaving the middle bare.
 	if !strings.Contains(rows[0], "\x1b[48") {
 		t.Fatalf("image line row = %q, want the cursor line wash", rows[0])
 	}
@@ -109,7 +102,6 @@ func TestImageTargetsListsEveryReference(t *testing.T) {
 	}
 }
 
-// withImage renders text where target has been given a cols x rows placement.
 func withImage(t *testing.T, text, target string, cols, rows int) (*Editor, []string) {
 	t.Helper()
 	e := New(text)
@@ -157,8 +149,6 @@ func TestImageRowsCarryPositionDiacritics(t *testing.T) {
 func TestImageRowsAreUnnumbered(t *testing.T) {
 	_, rows := withImage(t, "![alt](pic.png)\nbelow", "pic.png", 4, 2)
 
-	// The gutter shows the cursor line's own number, then distances. The image
-	// belongs to line 1, so its rows carry no number of their own.
 	if got := ansi.Strip(rows[0]); !strings.HasPrefix(got, " 1 ") {
 		t.Fatalf("image line gutter = %q, want the line number", got)
 	}

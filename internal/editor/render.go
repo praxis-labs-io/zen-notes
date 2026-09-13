@@ -9,8 +9,7 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 )
 
-// Styles use ANSI base colors so the note takes on the terminal's own theme
-// rather than fighting it.
+// ANSI base colours so the note inherits the terminal theme.
 var classStyles = map[tokenClass]lipgloss.Style{
 	tokPlain:     lipgloss.NewStyle(),
 	tokHeading:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5")),
@@ -23,8 +22,7 @@ var classStyles = map[tokenClass]lipgloss.Style{
 	tokLink:      lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("4")),
 }
 
-// Fallbacks for when the terminal never says what its background is, which
-// happens under some multiplexers. Dark only: it is the safer guess.
+// Used until the terminal reports its background, which some multiplexers never do.
 var (
 	darkSelection  = lipgloss.NewStyle().Background(lipgloss.Color("237"))
 	darkFlash      = lipgloss.NewStyle().Background(lipgloss.Color("242"))
@@ -32,8 +30,7 @@ var (
 	darkCursorLine = lipgloss.Color("236")
 )
 
-// How far each shade sits off the background. A step near white reads
-// stronger than near black, so light themes take a smaller one.
+// Light themes take smaller steps because a lightness shift near white reads stronger.
 const (
 	darkSelectionStep   = 0.14
 	lightSelectionStep  = 0.07
@@ -50,9 +47,8 @@ var (
 	currentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 )
 
-// SetBackground tunes the selection and the yank flash to the terminal's own
-// background, keeping its hue so both belong to the theme rather than greying
-// it out. Call it again whenever the terminal may have changed theme.
+// SetBackground derives the selection, yank flash, search match and cursor-line shades from the
+// terminal background c, keeping its hue. Call it again whenever the theme may have changed.
 func (e *Editor) SetBackground(c color.Color) {
 	col, ok := colorful.MakeColor(c)
 	if !ok {
@@ -72,7 +68,6 @@ func (e *Editor) SetBackground(c color.Color) {
 	e.cursorLine = shade(h, s, l, lineStep)
 }
 
-// shade is a colour the given lightness step away from the theme's.
 func shade(h, s, l, step float64) color.Color {
 	l = min(max(l+step, 0), 1)
 	return lipgloss.Color(colorful.Hsl(h, s, l).Hex())
@@ -82,13 +77,11 @@ func shifted(h, s, l, step float64) lipgloss.Style {
 	return lipgloss.NewStyle().Background(shade(h, s, l, step))
 }
 
-// YankFlash reports whether a yank is still lit up.
+// YankFlash reports whether a yank highlight is showing.
 func (e *Editor) YankFlash() bool { return e.flash.active }
 
-// ClearYankFlash puts the flash out.
 func (e *Editor) ClearYankFlash() { e.flash = flashRange{} }
 
-// flashYank lights up what a yank just took, so it is visible that it worked.
 func (e *Editor) flashYank(from, to Pos, linewise, block bool) {
 	e.flash = flashRange{active: true, from: from, to: to, linewise: linewise, block: block}
 }
@@ -100,15 +93,12 @@ func (e *Editor) flashCovers(p Pos) bool {
 	return inRange(p, e.flash.from, e.flash.to, e.flash.linewise, e.flash.block)
 }
 
-// GutterWidth is the widest line number plus the space before the text.
-// Reserved at all times, so nothing shifts as the line count grows.
+// GutterWidth returns the gutter width in cells for lineCount lines, including the space before the text.
 func GutterWidth(lineCount int) int {
 	digits := len(strconv.Itoa(lineCount))
 	return max(digits, 2) + 1
 }
 
-// gutter renders the number cell for one screen row. The cursor's line shows
-// its absolute number, every other line its distance, all in one column.
 func gutter(line, cursorLine, width int, first bool, bg color.Color) string {
 	if !first {
 		return washed(lipgloss.NewStyle(), bg).Render(strings.Repeat(" ", width))
@@ -123,8 +113,6 @@ func gutter(line, cursorLine, width int, first bool, bg color.Color) string {
 	return washed(numberStyle, bg).Render(pad(strconv.Itoa(distance), width))
 }
 
-// washed lays the cursor line's background under a style, leaving it alone
-// when there is none.
 func washed(s lipgloss.Style, bg color.Color) lipgloss.Style {
 	if bg == nil {
 		return s
@@ -132,7 +120,6 @@ func washed(s lipgloss.Style, bg color.Color) lipgloss.Style {
 	return s.Background(bg)
 }
 
-// pad right aligns s in width, leaving a trailing space before the text.
 func pad(s string, width int) string {
 	room := width - 1
 	if len(s) > room {
@@ -141,16 +128,14 @@ func pad(s string, width int) string {
 	return strings.Repeat(" ", room-len(s)) + s + " "
 }
 
-// Rendered is one frame of the buffer plus where the caret sits in it. The
-// caret is reported, not drawn, so the terminal's own cursor shows through.
+// Rendered is one frame and the caret position within it. The caret is reported, not drawn,
+// so the terminal's own cursor shows.
 type Rendered struct {
 	Content   string
 	CursorRow int
 	CursorCol int
 }
 
-// vrow is one wrapped screen row, including caret-only synthetic rows and the
-// placeholder rows an image is drawn on.
 type vrow struct {
 	line       int
 	start, end int
@@ -159,8 +144,8 @@ type vrow struct {
 	image      imageRow
 }
 
-// Render draws height rows of the buffer, scrolling to keep the caret in
-// sight. Width and height are the text area, excluding the status bar.
+// Render draws height rows of width cells, scrolling to keep the caret visible, and caches the
+// layout that screen motions read.
 func (e *Editor) Render(width, height int) Rendered {
 	width = max(width, 1)
 	height = max(height, 1)
@@ -200,8 +185,6 @@ func (e *Editor) Render(width, height int) Rendered {
 	}
 }
 
-// layout wraps every line and reports where the cursor lands, as a row index
-// into the returned rows and a display column within that row.
 func (e *Editor) layout(width int) ([]vrow, int, int) {
 	var rows []vrow
 	cursorRow, cursorCol := 0, 0
@@ -247,8 +230,6 @@ func (e *Editor) layout(width int) ([]vrow, int, int) {
 	return rows, cursorRow, cursorCol
 }
 
-// imageRows reserves the placeholder rows for a line's image, appended after
-// the line's text rows so the caret never lands in them.
 func (e *Editor) imageRows(line int) []vrow {
 	placement, ok := e.imagePlacement(line)
 	if !ok {
@@ -267,8 +248,6 @@ func (e *Editor) imageRows(line int) []vrow {
 	return rows
 }
 
-// cursorLineBG is the wash to lay under line, nil for any other line and for
-// visual modes, where the selection is already the thing to look at.
 func (e *Editor) cursorLineBG(line int) color.Color {
 	if line != e.cursor.Line || e.mode.Visual() {
 		return nil
@@ -276,7 +255,6 @@ func (e *Editor) cursorLineBG(line int) color.Color {
 	return e.cursorLine
 }
 
-// trail extends the cursor line's wash to the edge of the window.
 func trail(bg color.Color, width int) string {
 	if bg == nil || width <= 0 {
 		return ""
@@ -284,8 +262,7 @@ func trail(bg color.Color, width int) string {
 	return washed(lipgloss.NewStyle(), bg).Render(strings.Repeat(" ", width))
 }
 
-// renderRow styles one screen row and reports how wide it came out. It stops
-// at width, because the space a line wraps on stays on the row above.
+// Stops at width because the space a line wraps on stays on the row above.
 func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color.Color) (string, int) {
 	if row.image.ok() {
 		return row.image.render(width)
@@ -331,8 +308,6 @@ func (e *Editor) renderRow(row vrow, classes [][]tokenClass, width int, bg color
 	return sb.String(), col
 }
 
-// selected reports whether p is highlighted, which depends on which visual
-// mode is up. A block selection is a rectangle, not a run of text.
 func (e *Editor) selected(p, from, to Pos, linewise bool) bool {
 	switch e.mode {
 	case ModeVisualBlock:
@@ -344,8 +319,6 @@ func (e *Editor) selected(p, from, to Pos, linewise bool) bool {
 	}
 }
 
-// inRange covers the three shapes a highlight can take: a rectangle, whole
-// lines, or a run of characters.
 func inRange(p, from, to Pos, linewise, block bool) bool {
 	if block {
 		lo, hi := blockCols(from, to)
@@ -354,7 +327,6 @@ func inRange(p, from, to Pos, linewise, block bool) bool {
 	return inSelection(p, from, to, linewise)
 }
 
-// inSelection reports whether p falls inside an ordered visual range.
 func inSelection(p, from, to Pos, linewise bool) bool {
 	if linewise {
 		return p.Line >= from.Line && p.Line <= to.Line

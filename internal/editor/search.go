@@ -5,8 +5,7 @@ import (
 	"unicode/utf8"
 )
 
-// search is the live pattern. Matches are plain substrings rather than regular
-// expressions, which is what reads naturally when searching prose.
+// Plain substrings rather than regular expressions, since notes are prose.
 type search struct {
 	pattern  string
 	matches  []Pos
@@ -14,19 +13,15 @@ type search struct {
 	origin   Pos
 }
 
-// SearchPattern is the pattern currently highlighted, empty when none is.
+// SearchPattern returns the highlighted search pattern, or "" when there is none.
 func (e *Editor) SearchPattern() string { return e.search.pattern }
 
-// startSearch opens the / line, remembering where to put the cursor back if
-// the search is abandoned.
 func (e *Editor) startSearch() {
 	e.mode = ModeSearch
 	e.cmdline = nil
 	e.search.origin = e.cursor
 }
 
-// searchKey handles typing in the / line. Every keystroke re-runs the search,
-// so the cursor and the highlight follow along as the pattern is built.
 func (e *Editor) searchKey(k Key) {
 	switch k.Name {
 	case "esc":
@@ -54,8 +49,6 @@ func (e *Editor) searchKey(k Key) {
 	}
 }
 
-// preview runs the half-typed pattern without reporting anything, since a
-// message on every keystroke would be noise.
 func (e *Editor) preview() {
 	pattern := string(e.cmdline)
 	if pattern == "" {
@@ -73,7 +66,6 @@ func (e *Editor) preview() {
 	e.jumpFrom(e.search.origin, false, true)
 }
 
-// commitSearch accepts the pattern. An empty one reuses the last, as in vim.
 func (e *Editor) commitSearch(pattern string) {
 	e.mode = ModeNormal
 	e.cmdline = nil
@@ -101,8 +93,6 @@ func (e *Editor) clearSearch() {
 	e.search.pattern, e.search.matches = "", nil
 }
 
-// findMatches lists the start of every match, top to bottom. The search is
-// case insensitive unless the pattern itself carries a capital.
 func (e *Editor) findMatches(pattern string) []Pos {
 	sensitive := pattern != strings.ToLower(pattern)
 	needle := pattern
@@ -128,13 +118,10 @@ func (e *Editor) findMatches(pattern string) []Pos {
 	return out
 }
 
-// jumpToMatch is n and N: step to the match either side of the cursor.
 func (e *Editor) jumpToMatch(backward bool) {
 	e.jumpFrom(e.cursor, backward, false)
 }
 
-// jumpFrom moves to the match either side of from, wrapping around the buffer
-// and saying so unless asked to stay quiet.
 func (e *Editor) jumpFrom(from Pos, backward, quiet bool) {
 	matches := e.search.matches
 	if len(matches) == 0 {
@@ -170,15 +157,12 @@ func (e *Editor) moveToMatch(p Pos, wrapped, quiet bool) {
 	}
 }
 
-// refreshMatches recomputes matches against the current text, so editing does
-// not leave the highlight pointing at stale positions.
 func (e *Editor) refreshMatches() {
 	if e.search.pattern != "" {
 		e.search.matches = e.findMatches(e.search.pattern)
 	}
 }
 
-// matchCovers reports whether p sits inside a highlighted match.
 func (e *Editor) matchCovers(p Pos) bool {
 	n := utf8.RuneCountInString(e.search.pattern)
 	if n == 0 {

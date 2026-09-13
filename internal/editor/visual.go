@@ -7,8 +7,6 @@ import (
 
 const indentUnit = "  "
 
-// visualCommand runs the keys that only mean something with a selection up,
-// reporting whether it took the key.
 func (e *Editor) visualCommand(r rune) bool {
 	from, to, _ := e.Selection()
 	e.rememberVisual()
@@ -43,7 +41,6 @@ func (e *Editor) visualCommand(r rune) bool {
 	return true
 }
 
-// indentLines shifts a run of lines by one indent step in either direction.
 func (e *Editor) indentLines(from, to, dir int) {
 	e.snapshot()
 	for i := from; i <= to && i < e.buf.LineCount(); i++ {
@@ -59,7 +56,6 @@ func (e *Editor) indentLines(from, to, dir int) {
 	e.clampCursor()
 }
 
-// trimIndent removes up to one indent step of leading blanks.
 func trimIndent(line string) string {
 	for range len(indentUnit) {
 		if strings.HasPrefix(line, " ") {
@@ -74,7 +70,6 @@ func trimIndent(line string) string {
 	return line
 }
 
-// mapSelection rewrites every rune of the selection through fn.
 func (e *Editor) mapSelection(fn func(rune) rune) {
 	from, to, linewise := e.Selection()
 	e.snapshot()
@@ -97,7 +92,6 @@ func (e *Editor) mapSelection(fn func(rune) rune) {
 	e.clampCursor()
 }
 
-// mapRange rewrites an inclusive span on one or more lines.
 func (e *Editor) mapRange(from, to Pos, fn func(rune) rune) {
 	for line := from.Line; line <= to.Line && line < e.buf.LineCount(); line++ {
 		runes := append([]rune(nil), e.buf.runes(line)...)
@@ -115,7 +109,6 @@ func (e *Editor) mapRange(from, to Pos, fn func(rune) rune) {
 	}
 }
 
-// pasteVisual replaces the active selection and keeps the change to one undo.
 func (e *Editor) pasteVisual(reg register) {
 	from, to, _ := e.Selection()
 	switch e.mode {
@@ -172,8 +165,6 @@ func toggleCase(r rune) rune {
 	return unicode.ToUpper(r)
 }
 
-// joinLines pulls the lines after from up onto it, separated by one space and
-// with each joined line's leading blanks dropped.
 func (e *Editor) joinLines(from, to int) {
 	if from >= e.buf.LineCount()-1 {
 		return
@@ -194,12 +185,10 @@ func (e *Editor) joinLines(from, to int) {
 	e.clampCursor()
 }
 
-// blockCols gives the left and right columns of a block selection.
 func blockCols(from, to Pos) (int, int) {
 	return min(from.Col, to.Col), max(from.Col, to.Col)
 }
 
-// applyBlock runs d, c or y over a rectangle, one line at a time.
 func (e *Editor) applyBlock(op rune) {
 	from, to, _ := e.Selection()
 	lo, hi := blockCols(from, to)
@@ -248,8 +237,6 @@ func (e *Editor) applyBlock(op rune) {
 	e.clampCursor()
 }
 
-// startBlockInsert begins a block I or A. What gets typed on the first line is
-// replicated down the block when insert mode ends.
 func (e *Editor) startBlockInsert(atEnd bool) {
 	from, to, _ := e.Selection()
 	lo, hi := blockCols(from, to)
@@ -271,8 +258,6 @@ func (e *Editor) startBlockInsert(atEnd bool) {
 	}
 }
 
-// finishBlockInsert copies whatever was typed on the first line of a block
-// insert down the remaining lines.
 func (e *Editor) finishBlockInsert() {
 	b := e.blockInsert
 	e.blockInsert = blockPending{}

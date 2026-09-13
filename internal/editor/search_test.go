@@ -64,7 +64,6 @@ func TestSearchIsCaseInsensitiveByDefault(t *testing.T) {
 	}
 }
 
-// An uppercase letter in the pattern means you meant it, as smartcase does.
 func TestUppercaseInThePatternMakesItCaseSensitive(t *testing.T) {
 	e := run(t, "beta\nBeta", "/Beta<cr>")
 	if e.Cursor() != (Pos{1, 0}) {

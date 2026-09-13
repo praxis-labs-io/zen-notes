@@ -5,7 +5,6 @@ type inlineLink struct {
 	target   string
 }
 
-// inlineLinks returns the Markdown links on one line with rune-based spans.
 func inlineLinks(runes []rune) []inlineLink {
 	var links []inlineLink
 	for from := 0; from < len(runes); from++ {
@@ -170,7 +169,6 @@ func markdownText(runes []rune) string {
 	return string(text)
 }
 
-// inlineLinkAt finds a link whose complete Markdown span covers col.
 func inlineLinkAt(runes []rune, col int) (inlineLink, bool) {
 	for _, link := range inlineLinks(runes) {
 		if col >= link.from && col < link.to {

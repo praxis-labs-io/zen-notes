@@ -2,8 +2,6 @@ package editor
 
 import "unicode"
 
-// charClass splits runes the way vim does: blanks, word characters, and
-// everything else. A word boundary is any change between the latter two.
 type charClass int
 
 const (
@@ -23,8 +21,6 @@ func classOf(r rune) charClass {
 	}
 }
 
-// classAt reports the class at p, treating the position past a line's last
-// rune as blank so line ends separate words.
 func classAt(b *Buffer, p Pos) charClass {
 	line := b.runes(p.Line)
 	if p.Col >= len(line) {
@@ -33,13 +29,10 @@ func classAt(b *Buffer, p Pos) charClass {
 	return classOf(line[p.Col])
 }
 
-// isEmptyLine reports whether the line has no runes, which vim counts as a
-// word of its own for w and b.
 func isEmptyLine(b *Buffer, line int) bool {
 	return b.LineLen(line) == 0
 }
 
-// nextPos steps one rune forward, moving past a line end onto the next line.
 func nextPos(b *Buffer, p Pos) (Pos, bool) {
 	if p.Col < b.LineLen(p.Line) {
 		return Pos{p.Line, p.Col + 1}, true
@@ -50,7 +43,6 @@ func nextPos(b *Buffer, p Pos) (Pos, bool) {
 	return p, false
 }
 
-// prevPos steps one rune backward, moving past a line start onto the line above.
 func prevPos(b *Buffer, p Pos) (Pos, bool) {
 	if p.Col > 0 {
 		return Pos{p.Line, p.Col - 1}, true
@@ -61,7 +53,6 @@ func prevPos(b *Buffer, p Pos) (Pos, bool) {
 	return p, false
 }
 
-// wordForward is w and W: the start of the next word, or the buffer end.
 func wordForward(b *Buffer, p Pos, count int, big bool) Pos {
 	for range count {
 		p = wordForwardOnce(b, p, big)
@@ -102,7 +93,6 @@ func wordForwardOnce(b *Buffer, p Pos, big bool) Pos {
 	return cur
 }
 
-// wordBack is b and B: the start of the word before the cursor.
 func wordBack(b *Buffer, p Pos, count int, big bool) Pos {
 	for range count {
 		p = wordBackOnce(b, p, big)
@@ -144,7 +134,6 @@ func wordBackOnce(b *Buffer, p Pos, big bool) Pos {
 	}
 }
 
-// wordEnd is e and E: the last rune of the current or next word.
 func wordEnd(b *Buffer, p Pos, count int, big bool) Pos {
 	for range count {
 		p = wordEndOnce(b, p, big)
@@ -180,7 +169,6 @@ func wordEndOnce(b *Buffer, p Pos, big bool) Pos {
 	}
 }
 
-// firstNonBlank is the ^ column, or 0 on a line that is all blanks.
 func firstNonBlank(b *Buffer, line int) int {
 	runes := b.runes(line)
 	for i, r := range runes {
@@ -191,8 +179,6 @@ func firstNonBlank(b *Buffer, line int) int {
 	return 0
 }
 
-// findForward is f and t: the column of the count'th target right of the
-// cursor on this line, one short of it when till is set.
 func findForward(b *Buffer, p Pos, target rune, till bool, count int) (int, bool) {
 	line := b.runes(p.Line)
 	col := p.Col
@@ -215,8 +201,6 @@ func findForward(b *Buffer, p Pos, target rune, till bool, count int) (int, bool
 	return col, true
 }
 
-// findBack is F and T: the column of the count'th target left of the cursor
-// on this line, one past it when till is set.
 func findBack(b *Buffer, p Pos, target rune, till bool, count int) (int, bool) {
 	line := b.runes(p.Line)
 	col := p.Col
@@ -239,7 +223,6 @@ func findBack(b *Buffer, p Pos, target rune, till bool, count int) (int, bool) {
 	return col, true
 }
 
-// paragraphForward is }: the next blank line, or the last line.
 func paragraphForward(b *Buffer, p Pos, count int) Pos {
 	line := p.Line
 	for range count {
@@ -257,7 +240,6 @@ func paragraphForwardOnce(b *Buffer, line int) int {
 	return b.LineCount() - 1
 }
 
-// paragraphBack is {: the previous blank line, or the first line.
 func paragraphBack(b *Buffer, p Pos, count int) Pos {
 	line := p.Line
 	for range count {

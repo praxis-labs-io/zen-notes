@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Mode is the editing mode the next keystroke will be read in.
+// Mode is the editing mode the next key is read in.
 type Mode int
 
 const (
@@ -40,24 +40,20 @@ func (m Mode) String() string {
 	}
 }
 
-// Visual reports whether the mode is one of the three visual modes.
 func (m Mode) Visual() bool {
 	return m == ModeVisual || m == ModeVisualLine || m == ModeVisualBlock
 }
 
-// Key is one keystroke: either a literal rune or a named key like esc or c-d.
+// Key is one keystroke: a literal rune R, or a named key such as "esc" or "c-d".
 type Key struct {
 	R    rune
 	Name string
 }
 
-// Rune builds a literal keystroke.
 func Rune(r rune) Key { return Key{R: r} }
 
-// Named builds a keystroke for a key with no rune, such as esc or c-d.
 func Named(name string) Key { return Key{Name: name} }
 
-// motionKind decides how an operator turns a motion target into a range.
 type motionKind int
 
 const (
@@ -71,22 +67,17 @@ type motion struct {
 	kind   motionKind
 }
 
-// register holds the last yank or delete. Linewise content is put on its own
-// lines rather than inside the current one.
 type register struct {
 	text     string
 	linewise bool
 	block    bool
 }
 
-// find remembers the last f, t, F or T so ; and , can walk it.
 type find struct {
 	kind   rune
 	target rune
 }
 
-// blockPending tracks a visual-block I or A, so leaving insert mode can
-// replicate what was typed down the other lines of the block.
 type blockPending struct {
 	active     bool
 	firstLine  int
@@ -96,7 +87,6 @@ type blockPending struct {
 	insertedAt Pos
 }
 
-// flashRange is the span a yank briefly lights up.
 type flashRange struct {
 	active   bool
 	from, to Pos
@@ -109,8 +99,6 @@ type snapshot struct {
 	cursor Pos
 }
 
-// pending is the half-typed normal-mode command: counts, an operator waiting
-// for its motion, and any key that expects an argument next.
 type pending struct {
 	count1 int
 	op     rune
@@ -119,7 +107,6 @@ type pending struct {
 	keys   []rune
 }
 
-// count multiplies the operator and motion counts, as vim does for d2w.
 func (p pending) count() int {
 	c := 1
 	if p.count1 > 0 {
@@ -131,7 +118,7 @@ func (p pending) count() int {
 	return c
 }
 
-// Editor is a modal buffer: text, cursor, mode, and the undo stack.
+// Editor is a modal vim buffer: text, cursor, mode, register and undo history.
 type Editor struct {
 	buf    *Buffer
 	cursor Pos
@@ -176,12 +163,11 @@ type Editor struct {
 
 const undoDepth = 200
 
-// New opens text in normal mode with the cursor at the start.
+// New returns an editor on text in normal mode with the cursor at the start.
 func New(text string) *Editor {
 	return &Editor{
-		buf:  NewBuffer(text),
-		mode: ModeNormal,
-		// Assume dark until the terminal answers.
+		buf:        NewBuffer(text),
+		mode:       ModeNormal,
 		selection:  darkSelection,
 		flashStyle: darkFlash,
 		matchStyle: darkMatch,
@@ -190,16 +176,13 @@ func New(text string) *Editor {
 	}
 }
 
-// Text is the current buffer contents.
 func (e *Editor) Text() string { return e.buf.Text() }
 
-// LineCount is how many lines the buffer holds, for a caller sizing the gutter.
 func (e *Editor) LineCount() int { return e.buf.LineCount() }
 
-// Cursor is where the caret sits.
 func (e *Editor) Cursor() Pos { return e.cursor }
 
-// SetCursor moves the caret, clamped to the buffer.
+// SetCursor moves the caret to p, clamped to the buffer.
 func (e *Editor) SetCursor(p Pos) {
 	e.cursor = e.buf.Clamp(p)
 	e.clampCursor()
@@ -207,53 +190,49 @@ func (e *Editor) SetCursor(p Pos) {
 	e.screenColSet = false
 }
 
-// Mode is the current editing mode.
 func (e *Editor) Mode() Mode { return e.mode }
 
-// Dirty reports whether the buffer changed since the last MarkSaved.
+// Dirty reports whether the buffer changed since the last MarkSaved or SetText.
 func (e *Editor) Dirty() bool { return e.dirty }
 
-// MarkSaved records that the current text reached disk.
 func (e *Editor) MarkSaved() { e.dirty = false }
 
-// SetHeight tells the editor how many rows a half-page scroll covers.
+// SetHeight sets the window height that paging and scroll commands use. Non-positive n is ignored.
 func (e *Editor) SetHeight(n int) {
 	if n > 0 {
 		e.height = n
 	}
 }
 
-// QuitRequested reports whether :q or ZZ asked the app to exit.
+// QuitRequested reports whether :q, :wq, :x or ZZ asked the app to exit.
 func (e *Editor) QuitRequested() bool { return e.quit }
 
-// TakeSaveRequest reports whether :w asked for a save, and clears the request.
+// TakeSaveRequest reports whether a save was requested since the last call, and clears it.
 func (e *Editor) TakeSaveRequest() bool {
 	want := e.saveWanted
 	e.saveWanted = false
 	return want
 }
 
-// TakeClipboardRequest returns register text to copy to the system clipboard.
+// TakeClipboardRequest returns text to copy to the system clipboard, if any, and clears it.
 func (e *Editor) TakeClipboardRequest() (string, bool) {
 	text, wanted := e.clipboard, e.clipboardWanted
 	e.clipboard, e.clipboardWanted = "", false
 	return text, wanted
 }
 
-// TakeOpenLinkRequest returns a link requested by gx and clears the request.
+// TakeOpenLinkRequest returns the link target gx asked to open, if any, and clears it.
 func (e *Editor) TakeOpenLinkRequest() (string, bool) {
 	target, wanted := e.openLink, e.openLinkWanted
 	e.openLink, e.openLinkWanted = "", false
 	return target, wanted
 }
 
-// Message is the last thing the editor wants to tell the user.
 func (e *Editor) Message() string { return e.message }
 
-// ClearMessage drops the current message.
 func (e *Editor) ClearMessage() { e.message = "" }
 
-// CommandLine is the ":" line being typed, empty outside command mode.
+// CommandLine returns the ":" or "/" line being typed, prefix included, or "" in other modes.
 func (e *Editor) CommandLine() string {
 	switch e.mode {
 	case ModeCommand:
@@ -264,19 +243,16 @@ func (e *Editor) CommandLine() string {
 	return ""
 }
 
-// PendingKeys is the half-typed command, for the status bar.
+// PendingKeys returns the keys of the half-typed normal-mode command.
 func (e *Editor) PendingKeys() string { return string(e.pend.keys) }
 
-// SetText replaces the buffer, keeping the cursor in bounds. Used when
-// another instance writes the note.
+// SetText replaces the buffer, clamps the cursor, and clears undo history and the dirty flag.
+// In insert mode it seeds one undo point for the insert in progress. Mode is left alone; see Reset.
 func (e *Editor) SetText(text string) {
 	e.buf = NewBuffer(text)
 	e.cursor = e.buf.Clamp(e.cursor)
 	e.clampCursor()
 	e.undo, e.redo = nil, nil
-	// The swap can land mid-insert, and it takes the stack that entering
-	// insert mode built with it. Seed a new one so undo has somewhere to
-	// land rather than doing nothing until the user leaves insert mode.
 	if e.mode == ModeInsert {
 		e.undo = append(e.undo, snapshot{lines: e.buf.Lines(), cursor: e.cursor})
 	}
@@ -284,16 +260,9 @@ func (e *Editor) SetText(text string) {
 	e.refreshMatches()
 }
 
-// Reset drops everything anchored into the buffer — the half-typed command,
-// the command line, the visual range and the search — so a caller can swap
-// the note in underneath it. A caller does this alongside SetText, which
-// cannot do it itself because a reload must leave a typing user alone.
-//
-// Insert mode survives. It holds no position beyond the cursor, which the
-// caller sets anyway, and the day can roll over mid-sentence: dropping into
-// normal mode there turns the next keystrokes into commands on a note the
-// user did not ask to open. Every other mode carries state the new buffer
-// invalidates, so it goes.
+// Reset drops the pending command, command line, visual range, find and search, for use with
+// SetText when a different note is swapped in. Insert mode is kept so a day rollover mid-sentence
+// does not turn typing into commands.
 func (e *Editor) Reset() {
 	if e.mode != ModeInsert {
 		e.mode = ModeNormal
@@ -311,8 +280,7 @@ func (e *Editor) Reset() {
 	e.search.origin = Pos{}
 }
 
-// Selection is the visual range as an ordered pair, and whether it is
-// linewise. It is meaningless outside visual modes.
+// Selection returns the visual range in buffer order and whether it is linewise. Meaningless outside visual modes.
 func (e *Editor) Selection() (Pos, Pos, bool) {
 	from, to := e.visualStart, e.cursor
 	if to.Before(from) {
@@ -321,7 +289,6 @@ func (e *Editor) Selection() (Pos, Pos, bool) {
 	return from, to, e.mode == ModeVisualLine
 }
 
-// Feed applies one keystroke.
 func (e *Editor) Feed(k Key) {
 	switch e.mode {
 	case ModeInsert:
@@ -338,7 +305,7 @@ func (e *Editor) Feed(k Key) {
 	}
 }
 
-// Paste imports system clipboard text into the register and active mode.
+// Paste loads text into the register and inserts it for the current mode. A trailing newline makes it linewise.
 func (e *Editor) Paste(text string) {
 	if text == "" {
 		return
@@ -383,8 +350,6 @@ func (e *Editor) requestClipboard(reg register) {
 	e.clipboardWanted = true
 }
 
-// clampCursor keeps the caret on a real rune. Normal and visual modes stop on
-// the last rune; insert mode may sit one past it.
 func (e *Editor) clampCursor() {
 	e.cursor = e.buf.Clamp(e.cursor)
 	if e.mode == ModeInsert {
@@ -417,8 +382,6 @@ func (e *Editor) restore(from *[]snapshot, to *[]snapshot) {
 	e.clampCursor()
 	e.dirty = true
 }
-
-// ---- insert mode ----
 
 func (e *Editor) insertKey(k Key) {
 	switch k.Name {
@@ -518,8 +481,6 @@ func (e *Editor) backspace() {
 	e.dirty = true
 }
 
-// insertMove is navigation from inside insert mode, where the caret may sit
-// one past the last rune and there is no operator to feed.
 func (e *Editor) insertMove(name string) {
 	switch name {
 	case "up":
@@ -548,8 +509,6 @@ func (e *Editor) insertMove(name string) {
 	}
 }
 
-// forwardDelete is Delete in insert mode: take the rune under the caret, or
-// pull the next line up when there is none.
 func (e *Editor) forwardDelete() {
 	if e.cursor == e.buf.End() {
 		return
@@ -574,8 +533,6 @@ func (e *Editor) moveVertical(delta int) {
 	e.cursor.Col = e.desiredCol
 	e.clampCursor()
 }
-
-// ---- command mode ----
 
 func (e *Editor) commandKey(k Key) {
 	switch k.Name {
@@ -617,8 +574,6 @@ func (e *Editor) runCommand(cmd string) {
 	}
 }
 
-// ---- normal and visual modes ----
-
 func (e *Editor) normalKey(k Key) {
 	if k.Name != "" {
 		stands, ok := namedKeyCommand(k.Name, e.mode)
@@ -626,8 +581,6 @@ func (e *Editor) normalKey(k Key) {
 			e.namedNormalKey(k.Name)
 			return
 		}
-		// A navigation key is never an argument, so it cancels a half-typed
-		// f or i.
 		if e.pend.await != 0 {
 			e.pend = pending{}
 			return
@@ -640,8 +593,7 @@ func (e *Editor) normalKey(k Key) {
 	}
 }
 
-// runNormal dispatches one normal-mode key. countable is false for a key that
-// arrived named, where Home stands in for 0 and must not read as a count.
+// countable is false for named keys, so Home standing in for 0 never reads as a count.
 func (e *Editor) runNormal(r rune, countable bool) {
 	e.pend.keys = append(e.pend.keys, r)
 
@@ -704,12 +656,7 @@ func (e *Editor) namedNormalKey(name string) {
 	}
 }
 
-// namedKeyCommand maps a navigation key onto the normal-mode key it stands in
-// for, so counts, operators and visual mode work the same either way. Home and
-// End are motions, which is what makes d<End> and v<Home> fall out for free.
-//
-// Delete cuts the selection in visual mode, as vim does. It cannot ride on x
-// there, because ours still takes only the rune under the caret.
+// Delete maps to d in visual mode because x only ever takes the rune under the caret.
 func namedKeyCommand(name string, mode Mode) (rune, bool) {
 	switch name {
 	case "up":
@@ -738,10 +685,7 @@ func (e *Editor) halfPage(dir int) {
 	e.pend = pending{}
 }
 
-// pageSize is a screenful less the two lines vim's C-f and C-b keep on screen
-// to carry the reader across the jump. It counts logical lines, as halfPage
-// does, so a wrapped paragraph still moves further than one screen and the
-// overlap does not hold. ZNN-28 moves both onto display rows.
+// Two logical lines short of a screen, as vim's C-f and C-b; wrapped lines break the overlap.
 func (e *Editor) pageSize() int { return max(e.height-2, 1) }
 
 func (e *Editor) page(dir int) {
@@ -749,7 +693,6 @@ func (e *Editor) page(dir int) {
 	e.pend = pending{}
 }
 
-// digit accumulates a count. A leading zero is the motion, not a count.
 func (e *Editor) digit(r rune) bool {
 	if r < '0' || r > '9' {
 		return false
@@ -773,10 +716,7 @@ func (e *Editor) activeCount() int {
 	return e.pend.count2
 }
 
-// operator handles the keys that take a motion, including the doubled forms
-// like dd and >> that act on whole lines.
 func (e *Editor) operator(r rune) bool {
-	// gUU, guu and g~~ act on the whole line, like dd does for d.
 	if op, ok := caseOp(r); ok && e.pend.op == op {
 		last := min(e.cursor.Line+e.pend.count()-1, e.buf.LineCount()-1)
 		e.applyOperator(op, motion{target: Pos{last, 0}, kind: linewise})
@@ -815,8 +755,7 @@ func (e *Editor) operator(r rune) bool {
 	return true
 }
 
-// resolveMotion turns a motion key into a target, reporting false for keys
-// that are not motions. Keys needing an argument park in pend.await.
+// cw resolves as ce, as in vim, leaving the blank after the word.
 func (e *Editor) resolveMotion(r rune) (motion, bool) {
 	n := e.pend.count()
 	cur := e.cursor
@@ -838,7 +777,6 @@ func (e *Editor) resolveMotion(r rune) (motion, bool) {
 		return motion{Pos{cur.Line, max(e.buf.LineLen(cur.Line)-1, 0)}, charInclusive}, true
 	case 'w', 'W':
 		big := r == 'W'
-		// cw acts like ce, leaving the space after the word alone.
 		if e.pend.op == 'c' && classAt(e.buf, cur) != classBlank {
 			return motion{wordEnd(e.buf, cur, n, big), charInclusive}, true
 		}
@@ -873,8 +811,6 @@ func (e *Editor) resolveMotion(r rune) (motion, bool) {
 		e.pend.await = r
 		return motion{}, false
 	case 'i', 'a':
-		// Only an operator or a visual selection can take a text object;
-		// otherwise these are the insert keys.
 		if e.pend.op != 0 || e.mode.Visual() {
 			e.pend.await = r
 			return motion{}, false
@@ -889,8 +825,6 @@ func (e *Editor) resolveMotion(r rune) (motion, bool) {
 	return motion{}, false
 }
 
-// applyTextObject resolves an iw/aw/i(/a" style object and hands the span to
-// the pending operator, or selects it when in a visual mode.
 func (e *Editor) applyTextObject(around bool, object rune) {
 	span, ok := resolveTextObject(e.buf, e.cursor, around, object)
 	if !ok {
@@ -918,7 +852,6 @@ func (e *Editor) applyTextObject(around bool, object rune) {
 	e.operateChars(op, span.from, e.forwardOne(span.to))
 }
 
-// resolveAwait handles the second key of gg and the target of f, t, F and T.
 func (e *Editor) resolveAwait(r rune) {
 	await := e.pend.await
 	e.pend.await = 0
@@ -949,7 +882,6 @@ func (e *Editor) resolveAwait(r rune) {
 			e.requestLinkUnderCursor()
 			e.pend = pending{}
 		case 'U', 'u', '~':
-			// gU, gu and g~ are operators, so they wait for a motion next.
 			e.pend.op, _ = caseOp(r)
 		case 'v':
 			e.screenColSet = false
@@ -995,7 +927,6 @@ func (e *Editor) requestLinkUnderCursor() {
 	e.openLink, e.openLinkWanted = link.target, true
 }
 
-// applyFind runs one of f, t, F or T and moves or operates with the result.
 func (e *Editor) applyFind(kind, target rune, n int) {
 	var col int
 	var ok bool
@@ -1021,8 +952,7 @@ func (e *Editor) applyFind(kind, target rune, n int) {
 	e.applyMotion(motion{Pos{e.cursor.Line, col}, motionKind})
 }
 
-// repeatFind is ; and ,. A t or T repeat starts one rune further along, or it
-// would just find the character the cursor is already parked against.
+// A t or T repeat starts one rune along, or it would find the rune the cursor already rests against.
 func (e *Editor) repeatFind(reverse bool) {
 	if e.lastFind.kind == 0 {
 		e.pend = pending{}
@@ -1062,7 +992,6 @@ func flipFind(kind rune) rune {
 	}
 }
 
-// applyMotion either moves the caret or feeds a pending operator.
 func (e *Editor) applyMotion(m motion) {
 	op := e.pend.op
 	e.pend = pending{}
@@ -1083,7 +1012,6 @@ func (e *Editor) applyMotion(m motion) {
 	}
 }
 
-// applyOperator runs d, c or y over the range a motion describes.
 func (e *Editor) applyOperator(op rune, m motion) {
 	from, to := e.cursor, m.target
 	if to.Before(from) {
@@ -1100,7 +1028,6 @@ func (e *Editor) applyOperator(op rune, m motion) {
 	e.operateChars(op, from, to)
 }
 
-// forwardOne widens an inclusive motion to cover its target rune.
 func (e *Editor) forwardOne(p Pos) Pos {
 	if p.Col < e.buf.LineLen(p.Line) {
 		return Pos{p.Line, p.Col + 1}
@@ -1196,7 +1123,6 @@ func (e *Editor) operateChars(op rune, from, to Pos) {
 	e.clampCursor()
 }
 
-// reportYank says what a yank took, since nothing on screen changes.
 func (e *Editor) reportYank(n int, unit string) {
 	plural := "s"
 	if n == 1 {
@@ -1205,7 +1131,6 @@ func (e *Editor) reportYank(n int, unit string) {
 	e.message = fmt.Sprintf("yanked %d %s%s", n, unit, plural)
 }
 
-// textBetween reads a range without changing the buffer.
 func (e *Editor) textBetween(from, to Pos) string {
 	if from.Line == to.Line {
 		line := e.buf.runes(from.Line)
@@ -1222,7 +1147,6 @@ func (e *Editor) textBetween(from, to Pos) string {
 	return sb.String()
 }
 
-// applyVisual runs an operator over the current selection.
 func (e *Editor) applyVisual(op rune) {
 	e.rememberVisual()
 	if e.mode == ModeVisualBlock {
@@ -1242,7 +1166,6 @@ func (e *Editor) applyVisual(op rune) {
 	e.operateChars(op, from, e.forwardOne(to))
 }
 
-// command runs the standalone normal-mode keys that take no motion.
 func (e *Editor) command(r rune) {
 	if r != 'v' && r != 'V' {
 		e.screenColSet = false
@@ -1335,7 +1258,6 @@ func (e *Editor) startVisual(m Mode) {
 	e.visualStart = e.cursor
 }
 
-// put inserts the register after the cursor, or before it when after is false.
 func (e *Editor) put(after bool) {
 	e.putRegister(after, true)
 }

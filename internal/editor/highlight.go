@@ -5,8 +5,7 @@ import (
 	"unicode/utf8"
 )
 
-// tokenClass is what a rune means in markdown. Styling maps these to colors,
-// so the classifier stays testable without comparing escape sequences.
+// Classes rather than styles so the classifier is testable without comparing escape sequences.
 type tokenClass int
 
 const (
@@ -30,7 +29,7 @@ var (
 	codeRe     = regexp.MustCompile("`[^`\n]*`")
 )
 
-// inlinePatterns run in order; earlier ones claim their runes first.
+// Order matters: earlier patterns claim their runes first.
 var inlinePatterns = []struct {
 	re    *regexp.Regexp
 	class tokenClass
@@ -40,7 +39,6 @@ var inlinePatterns = []struct {
 	{emphasisRe, tokEmphasis},
 }
 
-// classifyBuffer classifies every line, carrying fenced code state downward.
 func classifyBuffer(b *Buffer) [][]tokenClass {
 	out := make([][]tokenClass, b.LineCount())
 	inFence := false
@@ -55,8 +53,6 @@ func classifyBuffer(b *Buffer) [][]tokenClass {
 	return out
 }
 
-// classifyLine labels each rune of one line. inFence marks a line sitting
-// inside a fenced code block, where nothing else is markup.
 func classifyLine(runes []rune, inFence bool) []tokenClass {
 	classes := make([]tokenClass, len(runes))
 	if len(runes) == 0 {
@@ -82,8 +78,6 @@ func classifyLine(runes []rune, inFence bool) []tokenClass {
 	return classes
 }
 
-// markLinePrefix labels bullets, quote markers and checkboxes, returning the
-// rune index where ordinary text begins.
 func markLinePrefix(runes []rune, classes []tokenClass) int {
 	item, isList := parseListLine(runes)
 	if isList {
@@ -126,8 +120,7 @@ func markCheckbox(runes []rune, classes []tokenClass, at int) {
 	fill(classes, at, at+3, class)
 }
 
-// markInline styles each pattern over only the still-plain runs, so a star
-// left over from a bold span cannot pair with a later one across it.
+// Matches only still-plain runs so a star left from a bold span cannot pair across it.
 func markInline(runes []rune, classes []tokenClass, from int) {
 	for _, link := range inlineLinks(runes) {
 		start := link.from
@@ -149,7 +142,6 @@ func markInline(runes []rune, classes []tokenClass, from int) {
 	}
 }
 
-// plainRuns lists the half-open ranges at or after from that are still plain.
 func plainRuns(classes []tokenClass, from int) [][2]int {
 	var runs [][2]int
 	start := -1

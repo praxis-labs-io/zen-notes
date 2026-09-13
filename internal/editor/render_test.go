@@ -12,8 +12,6 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 )
 
-// classLetters gives each token class a letter so a whole line's
-// classification reads as a string the same length as the line.
 var classLetters = map[tokenClass]rune{
 	tokPlain:     '.',
 	tokHeading:   'H',
@@ -83,8 +81,6 @@ func TestClassifyLine(t *testing.T) {
 	}
 }
 
-// Emphasis must still be found after a bold or code span earlier in the line,
-// where a naive left-to-right scan pairs the wrong stars.
 func TestClassifyEmphasisAfterOtherSpans(t *testing.T) {
 	tests := []struct {
 		name string
@@ -378,7 +374,6 @@ func TestDisplayLineMotionsUseRenderedColumns(t *testing.T) {
 	}
 }
 
-// The caret sits one past the last rune in insert mode, on the blank cell.
 func TestRenderCursorPastTheLastRune(t *testing.T) {
 	e := New("ab")
 	feed(t, e, "A")
@@ -502,8 +497,6 @@ func TestGutterShowsHybridLineNumbers(t *testing.T) {
 	}
 }
 
-// The gutter is sized from the line count, so the absolute number on the
-// cursor's line always fits, at every size, without shifting the text.
 func TestGutterFitsTheCurrentLineNumberAtAnyLength(t *testing.T) {
 	for _, lines := range []int{9, 10, 99, 100, 250, 1000, 4321} {
 		e := New(strings.TrimSuffix(strings.Repeat("x\n", lines), "\n"))
@@ -646,15 +639,12 @@ func TestGutterShiftsTheCursor(t *testing.T) {
 
 func TestTextWrapsInsideTheGutter(t *testing.T) {
 	e := New("aaaa bbbb")
-	// Width 14 with a 4 wide gutter leaves 10 columns, so this fits one row.
 	rows := strings.Split(ansi.Strip(e.Render(14, 10).Content), "\n")
 	if !strings.Contains(rows[0], "aaaa bbbb") {
 		t.Fatalf("row 0 = %q, want the whole line", rows[0])
 	}
 }
 
-// A row must never exceed the width it was given. The wrap point keeps the
-// break space on the previous row, which is what used to push it over.
 func TestRenderNeverExceedsTheGivenWidth(t *testing.T) {
 	texts := []string{
 		"A longer line that will wrap around the edge of this narrow window nicely.",
@@ -703,8 +693,6 @@ func TestScrollKeepsCursorVisible(t *testing.T) {
 	}
 }
 
-// The terminal is asked for its background, but the answer can be slow or
-// never arrive. Dark is the safer assumption in the meantime.
 func TestSelectionAssumesDarkUntilToldOtherwise(t *testing.T) {
 	e := New("abcd")
 	feed(t, e, "vl")
@@ -721,8 +709,6 @@ func TestSelectionAssumesDarkUntilToldOtherwise(t *testing.T) {
 	}
 }
 
-// The selection keeps the terminal background's hue, so it reads as part of
-// the theme rather than a grey patch laid over it.
 func TestSelectionFollowsTheTerminalTheme(t *testing.T) {
 	navy := colorful.Color{R: 0.05, G: 0.06, B: 0.14}
 	e := New("abcd")
@@ -776,7 +762,6 @@ func TestSelectionLightensDarkThemesAndDarkensLightOnes(t *testing.T) {
 	}
 }
 
-// selectionHex pulls the RGB background out of the rendered escape sequence.
 func selectionHex(t *testing.T, content string) string {
 	t.Helper()
 	m := regexp.MustCompile(`\x1b\[48;2;(\d+);(\d+);(\d+)m`).FindStringSubmatch(content)
@@ -787,8 +772,6 @@ func selectionHex(t *testing.T, content string) string {
 	return fmt.Sprintf("#%02x%02x%02x", n(m[1]), n(m[2]), n(m[3]))
 }
 
-// bgHex is the RGB background rendered behind the first occurrence of ch,
-// which is how a test names one highlight when several are on screen.
 func bgHex(t *testing.T, content, ch string) string {
 	t.Helper()
 	pattern := `\x1b\[[0-9;]*48;2;(\d+);(\d+);(\d+)m` + regexp.QuoteMeta(ch)
@@ -868,7 +851,6 @@ func TestCursorLineIsOnInInsertMode(t *testing.T) {
 	}
 }
 
-// The band is a wash, not a highlight. Syntax has to read through it.
 func TestCursorLineKeepsTheSyntaxColour(t *testing.T) {
 	e := New("# Heading\nplain")
 	if row := renderRows(e, 20, 3)[0]; !strings.Contains(row, "1;35") {
@@ -902,8 +884,6 @@ func TestSearchMatchWinsOverTheCursorLine(t *testing.T) {
 	}
 }
 
-// The band sits under every line you read, so it has to be the quietest of
-// the computed shades.
 func TestCursorLineIsSubtlerThanTheSelection(t *testing.T) {
 	e := New("abcd")
 	e.SetBackground(navy)
@@ -1016,7 +996,6 @@ func TestClearYankFlash(t *testing.T) {
 	}
 }
 
-// A stale flash would paint over text that has since moved.
 func TestEditClearsAPendingFlash(t *testing.T) {
 	e := run(t, "foo bar", "yiw")
 	feed(t, e, "x")
@@ -1034,7 +1013,6 @@ func TestYankFlashRendersDistinctlyFromSelection(t *testing.T) {
 	feed(t, e, "y")
 	flashed := e.Render(20, 3).Content
 
-	// Named by the rune they sit behind: the cursor line is also lit here.
 	if bgHex(t, selected, "a") == bgHex(t, flashed, "a") {
 		t.Fatal("the yank flash is the same colour as the selection")
 	}

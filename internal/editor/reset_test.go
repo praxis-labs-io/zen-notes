@@ -37,7 +37,6 @@ func TestResetClearsTheHalfTypedCommand(t *testing.T) {
 		t.Fatalf("PendingKeys = %q, want empty", e.PendingKeys())
 	}
 
-	// w now moves rather than completing the abandoned 2dw.
 	feed(t, e, "w")
 	if e.Text() != "one two three" {
 		t.Fatalf("Text = %q, want unchanged. The pending operator fired", e.Text())
@@ -78,7 +77,6 @@ func TestResetClearsTheSearch(t *testing.T) {
 		t.Fatalf("SearchPattern = %q, want empty", e.SearchPattern())
 	}
 
-	// n has nothing to repeat, so the cursor stays put.
 	e.SetCursor(Pos{})
 	feed(t, e, "n")
 	if e.Cursor() != (Pos{}) {
