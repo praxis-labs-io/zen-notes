@@ -77,7 +77,6 @@ func shifted(h, s, l, step float64) lipgloss.Style {
 	return lipgloss.NewStyle().Background(shade(h, s, l, step))
 }
 
-// YankFlash reports whether a yank highlight is showing.
 func (e *Editor) YankFlash() bool { return e.flash.active }
 
 func (e *Editor) ClearYankFlash() { e.flash = flashRange{} }
@@ -128,8 +127,7 @@ func pad(s string, width int) string {
 	return strings.Repeat(" ", room-len(s)) + s + " "
 }
 
-// Rendered is one frame and the caret position within it. The caret is reported, not drawn,
-// so the terminal's own cursor shows.
+// Rendered is one frame and the caret position within it. The caret is reported, not drawn.
 type Rendered struct {
 	Content   string
 	CursorRow int

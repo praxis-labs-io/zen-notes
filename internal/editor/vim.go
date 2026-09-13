@@ -8,7 +8,6 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Mode is the editing mode the next key is read in.
 type Mode int
 
 const (
@@ -118,7 +117,6 @@ func (p pending) count() int {
 	return c
 }
 
-// Editor is a modal vim buffer: text, cursor, mode, register and undo history.
 type Editor struct {
 	buf    *Buffer
 	cursor Pos
@@ -163,7 +161,6 @@ type Editor struct {
 
 const undoDepth = 200
 
-// New returns an editor on text in normal mode with the cursor at the start.
 func New(text string) *Editor {
 	return &Editor{
 		buf:        NewBuffer(text),
@@ -204,10 +201,8 @@ func (e *Editor) SetHeight(n int) {
 	}
 }
 
-// QuitRequested reports whether :q, :wq, :x or ZZ asked the app to exit.
 func (e *Editor) QuitRequested() bool { return e.quit }
 
-// TakeSaveRequest reports whether a save was requested since the last call, and clears it.
 func (e *Editor) TakeSaveRequest() bool {
 	want := e.saveWanted
 	e.saveWanted = false
@@ -221,7 +216,6 @@ func (e *Editor) TakeClipboardRequest() (string, bool) {
 	return text, wanted
 }
 
-// TakeOpenLinkRequest returns the link target gx asked to open, if any, and clears it.
 func (e *Editor) TakeOpenLinkRequest() (string, bool) {
 	target, wanted := e.openLink, e.openLinkWanted
 	e.openLink, e.openLinkWanted = "", false
@@ -243,7 +237,6 @@ func (e *Editor) CommandLine() string {
 	return ""
 }
 
-// PendingKeys returns the keys of the half-typed normal-mode command.
 func (e *Editor) PendingKeys() string { return string(e.pend.keys) }
 
 // SetText replaces the buffer, clamps the cursor, and clears undo history and the dirty flag.
@@ -261,8 +254,7 @@ func (e *Editor) SetText(text string) {
 }
 
 // Reset drops the pending command, command line, visual range, find and search, for use with
-// SetText when a different note is swapped in. Insert mode is kept so a day rollover mid-sentence
-// does not turn typing into commands.
+// SetText when a different note is swapped in. Insert mode is kept.
 func (e *Editor) Reset() {
 	if e.mode != ModeInsert {
 		e.mode = ModeNormal

@@ -5,7 +5,6 @@ import (
 	"unicode/utf8"
 )
 
-// Classes rather than styles so the classifier is testable without comparing escape sequences.
 type tokenClass int
 
 const (

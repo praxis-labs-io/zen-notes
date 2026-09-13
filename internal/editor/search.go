@@ -13,7 +13,6 @@ type search struct {
 	origin   Pos
 }
 
-// SearchPattern returns the highlighted search pattern, or "" when there is none.
 func (e *Editor) SearchPattern() string { return e.search.pattern }
 
 func (e *Editor) startSearch() {

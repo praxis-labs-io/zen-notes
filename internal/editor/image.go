@@ -11,7 +11,6 @@ import (
 // MaxImageCells caps an image's rows and columns: kitty placeholders address each with a fixed diacritic table.
 const MaxImageCells = 297
 
-// ImagePlacement is a kitty image id and the cells reserved for it.
 type ImagePlacement struct {
 	ID         int
 	Cols, Rows int
