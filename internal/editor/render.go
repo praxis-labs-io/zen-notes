@@ -48,7 +48,7 @@ var (
 )
 
 // SetBackground derives the selection, yank flash, search match and cursor-line shades from the
-// terminal background c, keeping its hue. Call it again whenever the theme may have changed.
+// terminal background c. Call it again whenever the theme may have changed.
 func (e *Editor) SetBackground(c color.Color) {
 	col, ok := colorful.MakeColor(c)
 	if !ok {

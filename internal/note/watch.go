@@ -9,7 +9,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Watcher reports dated notes changing on disk. It watches the directory, since an atomic save replaces the file's inode.
+// Watcher reports dated notes changing on disk.
 type Watcher struct {
 	fs      *fsnotify.Watcher
 	changes chan string

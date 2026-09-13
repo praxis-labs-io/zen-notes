@@ -42,7 +42,6 @@ func (e *Editor) imagePlacement(line int) (ImagePlacement, bool) {
 	return placement, ok
 }
 
-// Only a line holding nothing but the image draws it, since the image takes rows of its own.
 func imageLineTarget(runes []rune) (string, bool) {
 	from := leadingSpaceEnd(runes)
 	to := len(runes)

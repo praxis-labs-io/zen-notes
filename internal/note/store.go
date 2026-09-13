@@ -96,7 +96,7 @@ func (s *Store) Load(d Day) (string, error) {
 	return string(b), nil
 }
 
-// Save replaces the day's note atomically, so a concurrent reader never sees a partial note.
+// Save replaces the day's note atomically.
 func (s *Store) Save(d Day, content string) error {
 	f, err := os.CreateTemp(s.dir, ".zen-*.tmp")
 	if err != nil {

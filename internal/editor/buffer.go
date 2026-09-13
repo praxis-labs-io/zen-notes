@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Pos addresses a rune in the buffer. Col counts runes, not bytes or cells.
+// Pos.Col counts runes, not bytes or cells.
 type Pos struct {
 	Line int
 	Col  int
@@ -69,8 +69,7 @@ func (b *Buffer) runes(i int) []rune {
 	return b.lines[i]
 }
 
-// Lines returns a snapshot for undo. Line slices are shared, not copied, so every
-// mutator must replace a line rather than write through it.
+// Lines returns an undo snapshot that shares line slices with the buffer.
 func (b *Buffer) Lines() [][]rune {
 	return slices.Clone(b.lines)
 }

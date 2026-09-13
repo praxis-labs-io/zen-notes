@@ -209,7 +209,6 @@ func (e *Editor) TakeSaveRequest() bool {
 	return want
 }
 
-// TakeClipboardRequest returns text to copy to the system clipboard, if any, and clears it.
 func (e *Editor) TakeClipboardRequest() (string, bool) {
 	text, wanted := e.clipboard, e.clipboardWanted
 	e.clipboard, e.clipboardWanted = "", false
