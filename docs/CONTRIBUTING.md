@@ -26,6 +26,23 @@ ZEN_NOTES_DIR=/tmp/zn zen-notes
 Point `ZEN_NOTES_DIR` at a scratch directory while you work. The app writes on
 a timer with no confirmation, and it is your real notes otherwise.
 
+For a demo or a screenshot, use `-mockup` instead:
+
+```
+zen-notes -mockup
+```
+
+It seeds a temporary directory with the fixture notes in `internal/mockup`,
+dated back from today, and removes it on exit. It ignores `$ZEN_NOTES_DIR` and
+refuses `-dir`, so it cannot reach your notes and nothing you type during a
+demo is kept.
+
+The fixtures carry the surfaces a screenshot should show: headings, lists,
+tasks, a fenced block, a quote, a link, an image and a line long enough to
+wrap. A test in `internal/mockup` fails when one of those goes missing. Edit
+the notes there rather than adding to the set, and keep the file names as the
+number of days back from today.
+
 ## The checks
 
 `make all` is the gate. It should be clean before you open a pull request.
@@ -61,6 +78,8 @@ Breaking one of these is a review-stopper.
 - **`internal/app` is the only place the two meet**, and the only package that
   talks to the terminal.
 - **`internal/version`** holds the version release builds stamp in.
+- **`internal/mockup`** holds the fixture notes `-mockup` demos on. Fixtures
+  only, no behavior.
 
 Agent-facing invariants live in [`CLAUDE.md`](../CLAUDE.md).
 
@@ -154,6 +173,7 @@ at merge time and again before a release:
 | `internal/app/**` | [`keys.md`](keys.md), [`guide.md`](guide.md) |
 | `internal/note/**` | [`guide.md`](guide.md) |
 | `main.go`, `install.sh`, `.github/workflows/**` | [`install.md`](install.md), [`README.md`](../README.md) |
+| `internal/mockup/**` | this file |
 | the test conventions, the boundaries | this file |
 
 `git diff --name-only <ref>..HEAD` gives the left column, so the set of documents
