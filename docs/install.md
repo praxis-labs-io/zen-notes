@@ -57,11 +57,11 @@ zen-notes
 
 ## Where notes live
 
-`$ZEN_NOTES_DIR`, or `~/.zen-notes` if that is unset. One flag, `-dir`,
+`$ZEN_NOTES_DIR`, or `~/.zen-notes` if that is unset. One flag, `--dir`,
 overrides it for a single run:
 
 ```sh
-zen-notes -dir ~/work-notes
+zen-notes --dir ~/work-notes
 ```
 
 [The guide](guide.md) covers what happens in that directory: one file per day,
@@ -71,6 +71,6 @@ how two terminals stay in sync, and what happens at midnight.
 
 Re-run whichever install command you used. Both fetch the newest release.
 
-Nothing checks for updates and nothing phones home. `zen-notes -version` says
+Nothing checks for updates and nothing phones home. `zen-notes --version` says
 what you are running, and reports `dev` on a source build: the version is
 stamped in at link time, and only the release workflow stamps it.

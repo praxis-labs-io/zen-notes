@@ -26,15 +26,15 @@ ZEN_NOTES_DIR=/tmp/zn zen-notes
 Point `ZEN_NOTES_DIR` at a scratch directory while you work. The app writes on
 a timer with no confirmation, and it is your real notes otherwise.
 
-For a demo or a screenshot, use `-mockup` instead:
+For a demo or a screenshot, use `--mockup` instead:
 
 ```
-zen-notes -mockup
+zen-notes --mockup
 ```
 
 It seeds a temporary directory with the fixture notes in `internal/mockup`,
 dated back from today, and removes it on exit. It ignores `$ZEN_NOTES_DIR` and
-refuses `-dir`, so it cannot reach your notes and nothing you type during a
+refuses `--dir`, so it cannot reach your notes and nothing you type during a
 demo is kept.
 
 The fixtures carry the surfaces a screenshot should show: headings, lists,
@@ -78,7 +78,7 @@ Breaking one of these is a review-stopper.
 - **`internal/app` is the only place the two meet**, and the only package that
   talks to the terminal.
 - **`internal/version`** holds the version release builds stamp in.
-- **`internal/mockup`** holds the fixture notes `-mockup` demos on. Fixtures
+- **`internal/mockup`** holds the fixture notes `--mockup` demos on. Fixtures
   only, no behavior.
 
 Agent-facing invariants live in [`CLAUDE.md`](../CLAUDE.md).

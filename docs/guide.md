@@ -20,7 +20,7 @@ says so. Last write wins, nothing is merged.
 Past midnight the app moves to the new day on its own, unless you have browsed
 away from today.
 
-There is one flag, `-dir`, which overrides `$ZEN_NOTES_DIR` for a single run.
+There is one flag, `--dir`, which overrides `$ZEN_NOTES_DIR` for a single run.
 
 ## Images
 

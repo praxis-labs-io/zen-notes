@@ -57,7 +57,7 @@ func run(dir string, mock bool) error {
 }
 
 // resolveDir returns the notes directory to open and the cleanup that discards
-// it. -mockup refuses -dir, so fixtures can never land in real notes.
+// it. --mockup refuses --dir, so fixtures can never land in real notes.
 func resolveDir(dir string, mock bool) (string, func(), error) {
 	keep := func() {}
 	if !mock {
@@ -68,7 +68,7 @@ func resolveDir(dir string, mock bool) (string, func(), error) {
 		return dir, keep, err
 	}
 	if dir != "" {
-		return "", keep, errors.New("-mockup brings its own notes, so it cannot be combined with -dir")
+		return "", keep, errors.New("--mockup brings its own notes, so it cannot be combined with --dir")
 	}
 	seeded, err := mockup.Seed()
 	if err != nil {
