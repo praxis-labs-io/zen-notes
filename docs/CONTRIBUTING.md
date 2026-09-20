@@ -33,7 +33,8 @@ zen-notes --mockup
 ```
 
 It seeds a temporary directory with the fixture notes in `internal/mockup`,
-dated back from today, and removes it on exit. It ignores `$ZEN_NOTES_DIR` and
+dated back from today, and removes it when you quit. Killing the terminal skips
+that and leaves the directory in `$TMPDIR`. It ignores `$ZEN_NOTES_DIR` and
 refuses `--dir`, so it cannot reach your notes and nothing you type during a
 demo is kept.
 
