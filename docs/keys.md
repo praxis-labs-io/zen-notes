@@ -43,6 +43,13 @@ Modes: normal, insert, visual, visual-line, visual-block, and a `:` line.
 
 Counts work: `3j`, `d2w`, `2dd`.
 
+`home`, `end` and `del` stand in for normal-mode keys, so counts and operators
+reach them: `d<end>` and `v<home>` behave as `d$` and `v0`, and `3<del>` takes
+three runes. `del` cuts the selection in visual mode. `pgup` and `pgdn` move a
+screenful and take no count. All five work in insert mode as well, where `del`
+takes the rune ahead of the caret and pulls the next line up at the end of a
+line.
+
 The Vim register and system clipboard move together. Yanks, deletes, changes
 and substitutes update both. `p` and `P` reuse that register. Cmd+C copies an
 active visual selection when the terminal forwards Command keys. The terminal's

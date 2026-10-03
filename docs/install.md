@@ -4,6 +4,9 @@
 
 - **Nothing**, for a released binary. Everything is pure Go and statically
   linked, so there is no libc to match and no runtime to install.
+- **`curl`, `tar`, and either `sha256sum` or `shasum`**, only for the install
+  script below. It fetches over curl, unpacks a tarball, and refuses to install
+  anything it cannot check against the published checksums.
 - **Go 1.26 or later**, only if you are building it yourself.
 - **A terminal that speaks the kitty graphics protocol**, only if you want
   images to draw. Ghostty and kitty do. Everywhere else the reference stays
@@ -29,8 +32,10 @@ curl -fsSL https://raw.githubusercontent.com/praxis-labs-io/zen-notes/main/insta
 curl -fsSL https://raw.githubusercontent.com/praxis-labs-io/zen-notes/main/install.sh | VERSION=v0.2.0 sh
 ```
 
-Every release carries a `checksums.txt` beside the archives if you want to
-verify one before it runs.
+Every release carries a `checksums.txt` beside the archives. The script checks
+the download against it and installs nothing on a mismatch, so verifying is not
+a step to remember. Verify a `.zip` or a tarball you took off the releases page
+yourself against the same file.
 
 ### With Go
 
